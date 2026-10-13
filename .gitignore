@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+
+# Database & Local secrets
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+*.key
+*.secret
+secrets.yaml
+secrets.json
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+
+# OS generated files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage

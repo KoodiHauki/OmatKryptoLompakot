@@ -7,6 +7,7 @@ import uuid
 
 from ..connectors.cex.kraken import KrakenConnector
 from ..connectors.onchain.evm import EvmConnector
+from ..connectors.onchain.bitcoin import BitcoinConnector
 from ..connectors.pricing.coingecko import CoinGeckoClient
 from ..db.database import Database
 from ..db.models import utc_now_iso
@@ -77,6 +78,14 @@ class SyncService:
             if account["venue"] == "ethereum":
                 wallets = self.db.fetch_all("SELECT * FROM wallets WHERE account_id = ? AND is_active = 1;", (account_id,))
                 connector = EvmConnector(chain="ethereum")
+                success = True
+                for w in wallets:
+                    ok = connector.sync_wallet(account_id, w["id"], w["address"], self.db)
+                    if not ok:
+                        success = False
+            elif account["venue"] == "bitcoin":
+                wallets = self.db.fetch_all("SELECT * FROM wallets WHERE account_id = ? AND is_active = 1;", (account_id,))
+                connector = BitcoinConnector()
                 success = True
                 for w in wallets:
                     ok = connector.sync_wallet(account_id, w["id"], w["address"], self.db)

@@ -165,12 +165,18 @@ def add_onchain_account(req: CreateOnchainAccountRequest):
     _, sync_service, _ = get_services(db)
 
     chain = req.chain.lower().strip()
-    if chain != "ethereum":
-        raise HTTPException(status_code=400, detail=f"Lohkoketju '{chain}' ei ole vielä tuettu (Ethereum tuettu ensimmäisessä siivussa).")
+    if chain not in ("ethereum", "bitcoin"):
+        raise HTTPException(status_code=400, detail=f"Lohkoketju '{chain}' ei ole vielä tuettu (tuettu: ethereum, bitcoin).")
 
-    evm = EvmConnector(chain="ethereum")
-    if not evm.is_valid_address(req.address):
-        raise HTTPException(status_code=400, detail="Virheellinen Ethereum-lompakko-osoite (tulee olla 0x-alkuinen 42-merkkinen osoite).")
+    if chain == "ethereum":
+        evm = EvmConnector(chain="ethereum")
+        if not evm.is_valid_address(req.address):
+            raise HTTPException(status_code=400, detail="Virheellinen Ethereum-lompakko-osoite (tulee olla 0x-alkuinen 42-merkkinen osoite).")
+    elif chain == "bitcoin":
+        from ..connectors.onchain.bitcoin import BitcoinConnector
+        btc = BitcoinConnector()
+        if not btc.is_valid_address(req.address):
+            raise HTTPException(status_code=400, detail="Virheellinen Bitcoin-lompakko-osoite (esim. 1..., 3... tai bc1...).")
 
     account_id = f"onchain_{chain}_{slugify(req.name)}_{uuid.uuid4().hex[:6]}"
     wallet_id = f"w_{uuid.uuid4().hex[:12]}"
@@ -221,12 +227,20 @@ def test_account_connection(account_id: str):
         return {"account_id": account_id, "result": perm.model_dump()}
     elif account["type"] == "onchain":
         wallets = db.fetch_all("SELECT address FROM wallets WHERE account_id = ?;", (account_id,))
-        evm = EvmConnector(chain=account["venue"])
         results = []
-        for w in wallets:
-            valid = evm.is_valid_address(w["address"])
-            bal = evm.fetch_native_balance(w["address"]) if valid else None
-            results.append({"address": w["address"], "valid": valid, "native_balance": bal})
+        if account["venue"] == "ethereum":
+            evm = EvmConnector(chain="ethereum")
+            for w in wallets:
+                valid = evm.is_valid_address(w["address"])
+                bal = evm.fetch_native_balance(w["address"]) if valid else None
+                results.append({"address": w["address"], "valid": valid, "native_balance": bal})
+        elif account["venue"] == "bitcoin":
+            from ..connectors.onchain.bitcoin import BitcoinConnector
+            btc = BitcoinConnector()
+            for w in wallets:
+                valid = btc.is_valid_address(w["address"])
+                bal = btc.fetch_balance(w["address"]) if valid else None
+                results.append({"address": w["address"], "valid": valid, "native_balance": bal})
         return {"account_id": account_id, "wallets": results}
 
     raise HTTPException(status_code=400, detail="Tuntematon tilityyppi")

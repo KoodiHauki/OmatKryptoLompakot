@@ -342,24 +342,25 @@ cexForm.addEventListener('submit', async (e) => {
 
 onchainForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const chain = document.getElementById('onchain-chain').value;
   const name = document.getElementById('onchain-name').value.trim();
   const address = document.getElementById('onchain-address').value.trim();
 
-  showToast('Tarkistetaan ja tallennetaan Ethereum-osoitetta...', 'info');
+  showToast(`Tarkistetaan ja tallennetaan ${chain}-osoitetta...`, 'info');
   try {
     const res = await fetch('/api/accounts/onchain', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name,
-        chain: 'ethereum',
+        chain,
         address,
         label: name
       })
     });
     const data = await res.json();
     if (res.ok) {
-      showToast('Ethereum-lompakko lisätty ja saldot haettu!', 'success');
+      showToast(`${chain.toUpperCase()}-lompakko lisätty ja saldot haettu!`, 'success');
       closeModal();
       onchainForm.reset();
       loadPortfolio();
@@ -368,7 +369,7 @@ onchainForm.addEventListener('submit', async (e) => {
       showToast('Virhe: ' + (data.detail || 'Tallennus epäonnistui'), 'error');
     }
   } catch (err) {
-    showToast('Verkkovirhe Ethereum-osoitteen tallennuksessa', 'error');
+    showToast('Verkkovirhe osoitteen tallennuksessa', 'error');
   }
 });
 

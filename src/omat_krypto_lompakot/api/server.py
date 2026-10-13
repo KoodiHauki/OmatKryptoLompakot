@@ -9,11 +9,15 @@ from ..db.database import Database
 config = load_config()
 db = Database(config.database.get_resolved_path())
 
+from .routes import router
+
 app = FastAPI(
     title="OmatKryptoLompakot Hub",
     version=__version__,
     description="Moniketjuinen ja monipörssinen lompakko- ja portfoliokeskitin"
 )
+
+app.include_router(router)
 
 
 @app.get("/api/health")

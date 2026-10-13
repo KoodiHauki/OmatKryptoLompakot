@@ -7,7 +7,10 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ..connectors.cex.kraken import KrakenConnector
-from ..connectors.onchain.evm import EvmConnector
+from ..connectors.cex.binance import BinanceConnector
+from ..connectors.onchain.evm import EvmConnector, SUPPORTED_EVM_CHAINS
+from ..connectors.onchain.bitcoin import BitcoinConnector
+from ..connectors.onchain.solana import SolanaConnector
 from ..db.database import Database
 from ..db.models import utc_now_iso
 from ..secrets.keyring_store import KeyringStore
@@ -15,6 +18,9 @@ from ..services.aggregator import PortfolioAggregator, PortfolioSummary
 from ..services.sync_service import SyncService
 
 router = APIRouter(prefix="/api")
+
+ALL_SUPPORTED_CHAINS = sorted(list(SUPPORTED_EVM_CHAINS.keys())) + ["bitcoin", "solana"]
+ALL_SUPPORTED_CEXES = ["kraken", "binance"]
 
 
 class CreateCexAccountRequest(BaseModel):
@@ -35,6 +41,11 @@ class CreateOnchainAccountRequest(BaseModel):
 class SyncRequest(BaseModel):
     account_id: Optional[str] = None
     force: bool = False
+
+
+class TxSyncRequest(BaseModel):
+    account_id: str
+    limit: int = 50
 
 
 def slugify(text: str) -> str:
@@ -103,16 +114,25 @@ def add_cex_account(req: CreateCexAccountRequest):
     _, sync_service, keyring_store = get_services(db)
 
     venue = req.venue.lower().strip()
-    if venue != "kraken":
-        raise HTTPException(status_code=400, detail=f"CEX-pörssi '{venue}' ei ole vielä tuettu (Kraken tuettu ensimmäisessä siivussa).")
+    if venue not in ALL_SUPPORTED_CEXES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"CEX-pörssi '{venue}' ei ole tuettu (tuettu: {', '.join(ALL_SUPPORTED_CEXES)})."
+        )
 
     # Testataan heti yhteys ja oikeudet ennen tallennusta
-    connector = KrakenConnector(req.api_key, req.api_secret)
+    if venue == "kraken":
+        connector = KrakenConnector(req.api_key, req.api_secret)
+    elif venue == "binance":
+        connector = BinanceConnector(req.api_key, req.api_secret)
+    else:
+        raise HTTPException(status_code=400, detail="Tuntematon pörssi")
+
     perm_res = connector.check_permissions()
     if not perm_res.is_valid:
         raise HTTPException(
             status_code=400,
-            detail=f"Kraken-yhteystesti epäonnistui: {perm_res.error_message} ({perm_res.error_type})"
+            detail=f"{venue.capitalize()}-yhteystesti epäonnistui: {perm_res.error_message} ({perm_res.error_type})"
         )
 
     account_id = f"cex_{venue}_{slugify(req.name)}_{uuid.uuid4().hex[:6]}"
@@ -165,18 +185,33 @@ def add_onchain_account(req: CreateOnchainAccountRequest):
     _, sync_service, _ = get_services(db)
 
     chain = req.chain.lower().strip()
-    if chain not in ("ethereum", "bitcoin"):
-        raise HTTPException(status_code=400, detail=f"Lohkoketju '{chain}' ei ole vielä tuettu (tuettu: ethereum, bitcoin).")
+    if chain not in ALL_SUPPORTED_CHAINS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Lohkoketju '{chain}' ei ole tuettu (tuettu: {', '.join(ALL_SUPPORTED_CHAINS)})."
+        )
 
-    if chain == "ethereum":
-        evm = EvmConnector(chain="ethereum")
+    if chain in SUPPORTED_EVM_CHAINS:
+        evm = EvmConnector(chain=chain)
         if not evm.is_valid_address(req.address):
-            raise HTTPException(status_code=400, detail="Virheellinen Ethereum-lompakko-osoite (tulee olla 0x-alkuinen 42-merkkinen osoite).")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Virheellinen {SUPPORTED_EVM_CHAINS[chain]['name']}-lompakko-osoite (tulee olla 0x-alkuinen 42-merkkinen osoite)."
+            )
     elif chain == "bitcoin":
-        from ..connectors.onchain.bitcoin import BitcoinConnector
         btc = BitcoinConnector()
         if not btc.is_valid_address(req.address):
-            raise HTTPException(status_code=400, detail="Virheellinen Bitcoin-lompakko-osoite (esim. 1..., 3... tai bc1...).")
+            raise HTTPException(
+                status_code=400,
+                detail="Virheellinen Bitcoin-lompakko-osoite (esim. 1..., 3... tai bc1...)."
+            )
+    elif chain == "solana":
+        sol = SolanaConnector()
+        if not sol.is_valid_address(req.address):
+            raise HTTPException(
+                status_code=400,
+                detail="Virheellinen Solana-lompakko-osoite (Base58 32-44 merkkiä)."
+            )
 
     account_id = f"onchain_{chain}_{slugify(req.name)}_{uuid.uuid4().hex[:6]}"
     wallet_id = f"w_{uuid.uuid4().hex[:12]}"
@@ -216,31 +251,45 @@ def test_account_connection(account_id: str):
         raise HTTPException(status_code=404, detail="Tiliä ei löydy")
 
     _, _, keyring_store = get_services(db)
+    venue = account["venue"].lower().strip()
 
     if account["type"] == "cex":
         creds = keyring_store.get_credentials(account_id)
         if not creds:
             raise HTTPException(status_code=400, detail="API-avaimia ei löydy keyringistä")
         api_key, api_sec, _ = creds
-        connector = KrakenConnector(api_key, api_sec)
+        if venue == "kraken":
+            connector = KrakenConnector(api_key, api_sec)
+        elif venue == "binance":
+            connector = BinanceConnector(api_key, api_sec)
+        else:
+            raise HTTPException(status_code=400, detail="Tuntematon pörssi")
+
         perm = connector.check_permissions()
         return {"account_id": account_id, "result": perm.model_dump()}
+
     elif account["type"] == "onchain":
         wallets = db.fetch_all("SELECT address FROM wallets WHERE account_id = ?;", (account_id,))
         results = []
-        if account["venue"] == "ethereum":
-            evm = EvmConnector(chain="ethereum")
+        if venue in SUPPORTED_EVM_CHAINS:
+            evm = EvmConnector(chain=venue)
             for w in wallets:
                 valid = evm.is_valid_address(w["address"])
                 bal = evm.fetch_native_balance(w["address"]) if valid else None
-                results.append({"address": w["address"], "valid": valid, "native_balance": bal})
-        elif account["venue"] == "bitcoin":
-            from ..connectors.onchain.bitcoin import BitcoinConnector
+                results.append({"address": w["address"], "valid": valid, "native_balance": bal, "symbol": evm.native_symbol})
+        elif venue == "bitcoin":
             btc = BitcoinConnector()
             for w in wallets:
                 valid = btc.is_valid_address(w["address"])
                 bal = btc.fetch_balance(w["address"]) if valid else None
-                results.append({"address": w["address"], "valid": valid, "native_balance": bal})
+                results.append({"address": w["address"], "valid": valid, "native_balance": bal, "symbol": "BTC"})
+        elif venue == "solana":
+            sol = SolanaConnector()
+            for w in wallets:
+                valid = sol.is_valid_address(w["address"])
+                bal = sol.fetch_native_balance(w["address"]) if valid else None
+                results.append({"address": w["address"], "valid": valid, "native_balance": bal, "symbol": "SOL"})
+
         return {"account_id": account_id, "wallets": results}
 
     raise HTTPException(status_code=400, detail="Tuntematon tilityyppi")
@@ -257,6 +306,14 @@ def trigger_sync(req: SyncRequest):
     else:
         results = sync_service.sync_all(force=req.force)
         return {"sync_results": results}
+
+
+@router.post("/transactions/sync")
+def trigger_tx_sync(req: TxSyncRequest):
+    from .server import db
+    _, sync_service, _ = get_services(db)
+    res = sync_service.sync_account_transactions(req.account_id, limit=req.limit)
+    return res
 
 
 @router.delete("/accounts/{account_id}")

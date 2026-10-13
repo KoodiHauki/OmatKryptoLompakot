@@ -1,0 +1,14 @@
+services:
+  hub:
+    build: .
+    container_name: omat-krypto-hub
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - hub_data:/root/.local/share/omatkryptolompakot
+    environment:
+      - PYTHONUNBUFFERED=1
+
+volumes:
+  hub_data:

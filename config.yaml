@@ -28,3 +28,4 @@ indexers:
   polygon: "blockscout"
   optimism: "blockscout"
   bitcoin: "mempool.space"
+  solana: "rpc"

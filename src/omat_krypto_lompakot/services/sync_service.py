@@ -6,8 +6,10 @@ from typing import Any, Dict, List, Optional
 import uuid
 
 from ..connectors.cex.kraken import KrakenConnector
-from ..connectors.onchain.evm import EvmConnector
+from ..connectors.cex.binance import BinanceConnector
+from ..connectors.onchain.evm import EvmConnector, SUPPORTED_EVM_CHAINS
 from ..connectors.onchain.bitcoin import BitcoinConnector
+from ..connectors.onchain.solana import SolanaConnector
 from ..connectors.pricing.coingecko import CoinGeckoClient
 from ..db.database import Database
 from ..db.models import utc_now_iso
@@ -36,7 +38,7 @@ class SyncService:
             return False
 
     def sync_account(self, account_id: str, force: bool = False) -> Dict[str, Any]:
-        """Synkronoi yksittäisen tilin (CEX tai On-Chain)."""
+        """Synkronoi yksittäisen tilin (CEX tai On-Chain) saldot."""
         account = self.db.fetch_one("SELECT * FROM accounts WHERE id = ?;", (account_id,))
         if not account:
             return {"status": "error", "message": f"Tiliä {account_id} ei löydy"}
@@ -59,33 +61,45 @@ class SyncService:
 
         success = False
         error_msg = None
+        venue = account["venue"].lower().strip()
 
         if account["type"] == "cex":
-            if account["venue"] == "kraken":
-                creds = self.keyring_store.get_credentials(account_id)
-                if not creds:
-                    error_msg = "API-avaimia ei löydy keyringistä"
-                else:
-                    api_key, api_sec, _ = creds
-                    connector = KrakenConnector(api_key, api_sec)
-                    success, perm_res = connector.sync_to_database(account_id, self.db)
-                    if not success:
-                        error_msg = perm_res.error_message
+            creds = self.keyring_store.get_credentials(account_id)
+            if not creds:
+                error_msg = "API-avaimia ei löydy keyringistä"
+            elif venue == "kraken":
+                api_key, api_sec, _ = creds
+                connector = KrakenConnector(api_key, api_sec)
+                success, perm_res = connector.sync_to_database(account_id, self.db)
+                if not success:
+                    error_msg = perm_res.error_message
+            elif venue == "binance":
+                api_key, api_sec, _ = creds
+                connector = BinanceConnector(api_key, api_sec)
+                success, perm_res = connector.sync_to_database(account_id, self.db)
+                if not success:
+                    error_msg = perm_res.error_message
             else:
                 error_msg = f"Tuntematon CEX-pörssi: {account['venue']}"
 
         elif account["type"] == "onchain":
-            if account["venue"] == "ethereum":
-                wallets = self.db.fetch_all("SELECT * FROM wallets WHERE account_id = ? AND is_active = 1;", (account_id,))
-                connector = EvmConnector(chain="ethereum")
+            wallets = self.db.fetch_all("SELECT * FROM wallets WHERE account_id = ? AND is_active = 1;", (account_id,))
+            if venue in SUPPORTED_EVM_CHAINS:
+                connector = EvmConnector(chain=venue)
                 success = True
                 for w in wallets:
                     ok = connector.sync_wallet(account_id, w["id"], w["address"], self.db)
                     if not ok:
                         success = False
-            elif account["venue"] == "bitcoin":
-                wallets = self.db.fetch_all("SELECT * FROM wallets WHERE account_id = ? AND is_active = 1;", (account_id,))
+            elif venue == "bitcoin":
                 connector = BitcoinConnector()
+                success = True
+                for w in wallets:
+                    ok = connector.sync_wallet(account_id, w["id"], w["address"], self.db)
+                    if not ok:
+                        success = False
+            elif venue == "solana":
+                connector = SolanaConnector()
                 success = True
                 for w in wallets:
                     ok = connector.sync_wallet(account_id, w["id"], w["address"], self.db)
@@ -137,6 +151,57 @@ class SyncService:
             res = self.sync_account(acc["id"], force=force)
             results.append(res)
         return results
+
+    def sync_account_transactions(self, account_id: str, limit: int = 50) -> Dict[str, Any]:
+        """Synkronoi tilin transaktiohistorian kantaan."""
+        account = self.db.fetch_one("SELECT * FROM accounts WHERE id = ?;", (account_id,))
+        if not account:
+            return {"status": "error", "message": "Tiliä ei löydy"}
+
+        venue = account["venue"].lower().strip()
+        total_synced = 0
+
+        try:
+            if account["type"] == "cex":
+                creds = self.keyring_store.get_credentials(account_id)
+                if not creds:
+                    return {"status": "error", "message": "API-avaimia ei löydy"}
+                api_key, api_sec, _ = creds
+                if venue == "kraken":
+                    connector = KrakenConnector(api_key, api_sec)
+                    total_synced = connector.sync_transactions_to_database(account_id, self.db, limit=limit)
+                elif venue == "binance":
+                    connector = BinanceConnector(api_key, api_sec)
+                    total_synced = connector.sync_transactions_to_database(account_id, self.db, limit=limit)
+
+            elif account["type"] == "onchain":
+                wallets = self.db.fetch_all("SELECT * FROM wallets WHERE account_id = ? AND is_active = 1;", (account_id,))
+                for w in wallets:
+                    if venue in SUPPORTED_EVM_CHAINS:
+                        evm = EvmConnector(chain=venue)
+                        total_synced += evm.sync_transactions_to_database(account_id, w["address"], self.db, limit=limit)
+                    elif venue == "bitcoin":
+                        btc = BitcoinConnector()
+                        total_synced += btc.sync_transactions_to_database(account_id, w["address"], self.db, limit=limit)
+                    elif venue == "solana":
+                        sol = SolanaConnector()
+                        total_synced += sol.sync_transactions_to_database(account_id, w["address"], self.db, limit=limit)
+
+            now_iso = utc_now_iso()
+            self.db.execute(
+                """
+                INSERT INTO sync_state (account_id, last_tx_sync_at)
+                VALUES (?, ?)
+                ON CONFLICT(account_id) DO UPDATE SET
+                    last_tx_sync_at = excluded.last_tx_sync_at;
+                """,
+                (account_id, now_iso)
+            )
+
+            return {"status": "success", "account_id": account_id, "synced_transactions": total_synced}
+        except Exception as e:
+            logger.error(f"Virhe transaktioiden synkronoinnissa ({account_id}): {e}")
+            return {"status": "error", "account_id": account_id, "message": str(e)}
 
     def _update_prices_for_active_assets(self) -> None:
         """Hakee kurssit CoinGeckosta kaikille positiivisille saldoille."""

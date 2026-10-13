@@ -307,19 +307,20 @@ refreshAllBtn.addEventListener('click', async () => {
 // Form Submissions
 cexForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const venue = (document.getElementById('cex-venue')?.value || 'kraken').toLowerCase();
   const name = document.getElementById('cex-name').value.trim();
   const apiKey = document.getElementById('cex-api-key').value.trim();
   const apiSecret = document.getElementById('cex-api-secret').value.trim();
   const expires = document.getElementById('cex-expires').value;
 
-  showToast('Testataan ja tallennetaan Kraken-avainta...', 'info');
+  showToast(`Testataan ja tallennetaan ${venue.toUpperCase()}-avainta...`, 'info');
   try {
     const res = await fetch('/api/accounts/cex', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name,
-        venue: 'kraken',
+        venue,
         api_key: apiKey,
         api_secret: apiSecret,
         expires_at: expires ? expires + 'T00:00:00Z' : null
@@ -327,7 +328,7 @@ cexForm.addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     if (res.ok) {
-      showToast('Kraken-yhteys luotu ja saldot haettu!', 'success');
+      showToast(`${venue.toUpperCase()}-yhteys luotu ja saldot haettu!`, 'success');
       closeModal();
       cexForm.reset();
       loadPortfolio();
@@ -336,7 +337,7 @@ cexForm.addEventListener('submit', async (e) => {
       showToast('Virhe: ' + (data.detail || 'Tallennus epäonnistui'), 'error');
     }
   } catch (err) {
-    showToast('Verkkovirhe Kraken-yhteyden tallennuksessa', 'error');
+    showToast(`Verkkovirhe ${venue}-yhteyden tallennuksessa`, 'error');
   }
 });
 

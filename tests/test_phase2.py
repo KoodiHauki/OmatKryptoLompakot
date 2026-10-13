@@ -214,3 +214,8 @@ def test_api_routes():
     res = client.get("/api/portfolio")
     assert res.status_code == 200
     assert "total_eur" in res.json()
+
+    # Web Dashboard GUI index
+    res_gui = client.get("/")
+    assert res_gui.status_code == 200
+    assert "OmatKryptoLompakot" in res_gui.text

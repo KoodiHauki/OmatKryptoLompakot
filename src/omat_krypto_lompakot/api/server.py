@@ -1,15 +1,17 @@
 """FastAPI-palvelin: REST API ja tilatiedot."""
 
+from pathlib import Path
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+
 from .. import __version__
 from ..config import load_config
 from ..db.database import Database
+from .routes import router
 
 config = load_config()
 db = Database(config.database.get_resolved_path())
-
-from .routes import router
 
 app = FastAPI(
     title="OmatKryptoLompakot Hub",
@@ -18,6 +20,18 @@ app = FastAPI(
 )
 
 app.include_router(router)
+
+static_dir = Path(__file__).parent.parent / "web" / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+@app.get("/", response_class=FileResponse)
+def index():
+    index_file = static_dir / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return JSONResponse({"status": "ok", "message": "OmatKryptoLompakot Hub API"})
 
 
 @app.get("/api/health")

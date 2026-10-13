@@ -155,7 +155,7 @@ def add_cex_account(req: CreateCexAccountRequest):
     return {
         "status": "ok",
         "account_id": account_id,
-        "permission_check": perm_res.dict()
+        "permission_check": perm_res.model_dump()
     }
 
 
@@ -218,7 +218,7 @@ def test_account_connection(account_id: str):
         api_key, api_sec, _ = creds
         connector = KrakenConnector(api_key, api_sec)
         perm = connector.check_permissions()
-        return {"account_id": account_id, "result": perm.dict()}
+        return {"account_id": account_id, "result": perm.model_dump()}
     elif account["type"] == "onchain":
         wallets = db.fetch_all("SELECT address FROM wallets WHERE account_id = ?;", (account_id,))
         evm = EvmConnector(chain=account["venue"])
@@ -259,3 +259,124 @@ def delete_account(account_id: str):
 
     db.execute("DELETE FROM accounts WHERE id = ?;", (account_id,))
     return {"status": "ok", "deleted_account_id": account_id}
+
+
+class TokenOverrideRequest(BaseModel):
+    chain: str
+    contract_address: str
+    action: str  # 'allow' tai 'deny'
+    notes: Optional[str] = None
+
+
+@router.get("/transactions")
+def list_transactions(
+    chain: Optional[str] = None,
+    account_id: Optional[str] = None,
+    kind: Optional[str] = None,
+    include_spam: bool = False,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0)
+):
+    from .server import db
+
+    conditions = []
+    params = []
+
+    if chain:
+        conditions.append("t.chain = ?")
+        params.append(chain)
+    if account_id:
+        conditions.append("t.account_id = ?")
+        params.append(account_id)
+    if kind:
+        conditions.append("t.kind = ?")
+        params.append(kind)
+    if not include_spam:
+        conditions.append("t.is_spam = 0")
+
+    where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+    query = f"""
+        SELECT 
+            t.id, t.account_id, t.chain, t.hash, t.log_index, t.timestamp,
+            t.kind, t.from_address, t.to_address, t.asset_id, t.amount, t.fee,
+            t.is_spam, t.spam_reason,
+            acc.name as account_name, acc.venue,
+            a.symbol as asset_symbol, a.display_group
+        FROM transactions t
+        JOIN accounts acc ON t.account_id = acc.id
+        LEFT JOIN assets a ON t.asset_id = a.id
+        {where_clause}
+        ORDER BY t.timestamp DESC
+        LIMIT ? OFFSET ?;
+    """
+    params.extend([limit, offset])
+    txs = db.fetch_all(query, tuple(params))
+
+    count_query = f"SELECT count(*) as total FROM transactions t {where_clause};"
+    count_params = tuple(params[:-2])
+    total_row = db.fetch_one(count_query, count_params)
+    total_count = total_row["total"] if total_row else 0
+
+    return {
+        "total": total_count,
+        "limit": limit,
+        "offset": offset,
+        "transactions": txs
+    }
+
+
+@router.get("/token-overrides")
+def list_token_overrides():
+    from .server import db
+    overrides = db.fetch_all("SELECT * FROM token_overrides ORDER BY updated_at DESC;")
+    return {"overrides": overrides}
+
+
+@router.post("/token-overrides")
+def set_token_override(req: TokenOverrideRequest):
+    from .server import db
+    now_iso = utc_now_iso()
+    action = req.action.lower().strip()
+    if action not in ("allow", "deny"):
+        raise HTTPException(status_code=400, detail="Action tulee olla 'allow' tai 'deny'")
+
+    clean_addr = req.contract_address.lower().strip()
+    db.execute(
+        """
+        INSERT INTO token_overrides (chain, contract_address, action, notes, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(chain, contract_address) DO UPDATE SET
+            action = excluded.action,
+            notes = excluded.notes,
+            updated_at = excluded.updated_at;
+        """,
+        (req.chain.lower().strip(), clean_addr, action, req.notes, now_iso)
+    )
+
+    # Päivitetään myös transactions-taulun roskaliput tälle sopimukselle
+    is_spam_val = 1 if action == "deny" else 0
+    reason_val = req.notes or "Käyttäjän asettama override" if action == "deny" else None
+    db.execute(
+        """
+        UPDATE transactions SET
+            is_spam = ?,
+            spam_reason = ?
+        WHERE chain = ? AND (
+            lower(from_address) = ? OR lower(to_address) = ? OR asset_id LIKE ?
+        );
+        """,
+        (is_spam_val, reason_val, req.chain.lower().strip(), clean_addr, clean_addr, f"%{clean_addr}%")
+    )
+
+    return {"status": "ok", "override": req.model_dump()}
+
+
+@router.delete("/token-overrides/{chain}/{contract_address}")
+def delete_token_override(chain: str, contract_address: str):
+    from .server import db
+    clean_addr = contract_address.lower().strip()
+    db.execute(
+        "DELETE FROM token_overrides WHERE chain = ? AND lower(contract_address) = ?;",
+        (chain.lower().strip(), clean_addr)
+    )
+    return {"status": "ok", "deleted": f"{chain}:{clean_addr}"}

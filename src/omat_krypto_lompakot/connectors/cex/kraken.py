@@ -1,8 +1,9 @@
 """Kraken CCXT -liitin: saldot, yhteystestit ja oikeustarkistukset."""
 
 import logging
+from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import ccxt
 
 from ...db.database import Database
@@ -197,3 +198,124 @@ class KrakenConnector:
             )
 
         return True, perm_res
+
+    def fetch_transactions(self, since_ms: Optional[int] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        """Hakee kaupat, talletukset ja nostot Krakenista normalisoituina sanakirjoina."""
+        import json
+        txs: List[Dict[str, Any]] = []
+
+        # 1. Kaupat (Trades)
+        try:
+            if self.exchange.has.get("fetchMyTrades"):
+                trades = self.exchange.fetch_my_trades(since=since_ms, limit=limit)
+                for tr in trades:
+                    tr_id = str(tr.get("id") or tr.get("info", {}).get("ordertxid", "tx"))
+                    ts = tr.get("timestamp")
+                    iso_time = datetime.fromtimestamp(ts / 1000.0, timezone.utc).isoformat() if ts else utc_now_iso()
+                    raw_sym = tr.get("symbol", "UNKNOWN")
+                    norm_sym = normalize_kraken_symbol(raw_sym.split("/")[0])
+                    fee_info = tr.get("fee", {})
+                    fee_str = f"{fee_info.get('cost', '')} {fee_info.get('currency', '')}".strip()
+
+                    txs.append({
+                        "hash": tr_id,
+                        "log_index": 0,
+                        "timestamp": iso_time,
+                        "kind": "trade",
+                        "symbol": norm_sym,
+                        "amount": f"{Decimal(str(tr.get('amount', 0))):f}",
+                        "fee": fee_str or None,
+                        "raw_json": json.dumps(tr.get("info", tr))
+                    })
+        except Exception as e:
+            logger.warning(f"Kraken fetchMyTrades epäonnistui: {e}")
+
+        # 2. Talletukset (Deposits)
+        try:
+            if self.exchange.has.get("fetchDeposits"):
+                deposits = self.exchange.fetch_deposits(since=since_ms, limit=limit)
+                for dep in deposits:
+                    dep_id = str(dep.get("id") or dep.get("txid") or "dep")
+                    ts = dep.get("timestamp")
+                    iso_time = datetime.fromtimestamp(ts / 1000.0, timezone.utc).isoformat() if ts else utc_now_iso()
+                    norm_sym = normalize_kraken_symbol(dep.get("currency", "UNKNOWN"))
+
+                    txs.append({
+                        "hash": dep_id,
+                        "log_index": 0,
+                        "timestamp": iso_time,
+                        "kind": "deposit",
+                        "symbol": norm_sym,
+                        "amount": f"{Decimal(str(dep.get('amount', 0))):f}",
+                        "fee": None,
+                        "raw_json": json.dumps(dep.get("info", dep))
+                    })
+        except Exception as e:
+            logger.warning(f"Kraken fetchDeposits epäonnistui: {e}")
+
+        # 3. Nostot (Withdrawals)
+        try:
+            if self.exchange.has.get("fetchWithdrawals"):
+                withdrawals = self.exchange.fetch_withdrawals(since=since_ms, limit=limit)
+                for w in withdrawals:
+                    w_id = str(w.get("id") or w.get("txid") or "with")
+                    ts = w.get("timestamp")
+                    iso_time = datetime.fromtimestamp(ts / 1000.0, timezone.utc).isoformat() if ts else utc_now_iso()
+                    norm_sym = normalize_kraken_symbol(w.get("currency", "UNKNOWN"))
+                    fee_info = w.get("fee", {})
+                    fee_str = f"{fee_info.get('cost', '')} {fee_info.get('currency', '')}".strip()
+
+                    txs.append({
+                        "hash": w_id,
+                        "log_index": 0,
+                        "timestamp": iso_time,
+                        "kind": "withdrawal",
+                        "symbol": norm_sym,
+                        "amount": f"{Decimal(str(w.get('amount', 0))):f}",
+                        "fee": fee_str or None,
+                        "raw_json": json.dumps(w.get("info", w))
+                    })
+        except Exception as e:
+            logger.warning(f"Kraken fetchWithdrawals epäonnistui: {e}")
+
+        return txs
+
+    def sync_transactions_to_database(self, account_id: str, db: Database, since_ms: Optional[int] = None, limit: int = 50) -> int:
+        """Hakee ja tallentaa transaktiot SQLiteen."""
+        txs = self.fetch_transactions(since_ms=since_ms, limit=limit)
+        saved_count = 0
+
+        for tx in txs:
+            tx_id = f"kraken_{account_id}_{tx['hash']}_{tx['log_index']}"
+            asset_id = f"kraken:{tx['symbol'].lower()}"
+            
+            # Varmistetaan että asset_id on olemassa (Foreign Key)
+            db.execute(
+                """
+                INSERT INTO assets (id, chain, symbol, display_group)
+                VALUES (?, 'kraken', ?, ?)
+                ON CONFLICT(id) DO NOTHING;
+                """,
+                (asset_id, tx['symbol'], tx['symbol'])
+            )
+
+            db.execute(
+                """
+                INSERT INTO transactions (
+                    id, account_id, chain, hash, log_index, timestamp,
+                    kind, asset_id, amount, fee, is_spam, raw_json
+                )
+                VALUES (?, ?, 'kraken', ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                ON CONFLICT(account_id, chain, hash, log_index) DO UPDATE SET
+                    timestamp = excluded.timestamp,
+                    amount = excluded.amount,
+                    raw_json = excluded.raw_json;
+                """,
+                (
+                    tx_id, account_id, tx["hash"], tx["log_index"], tx["timestamp"],
+                    tx["kind"], asset_id, tx["amount"], tx["fee"], tx["raw_json"]
+                )
+            )
+            saved_count += 1
+
+        return saved_count

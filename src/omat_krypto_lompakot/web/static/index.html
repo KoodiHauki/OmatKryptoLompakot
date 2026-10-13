@@ -79,6 +79,9 @@
       <button id="tab-accounts-btn" class="pb-3 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center">
         🔑 Yhteydet & Avaimet (<span id="accounts-badge-count">0</span>)
       </button>
+      <button id="tab-transactions-btn" class="pb-3 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center">
+        📜 Transaktiot
+      </button>
     </div>
 
     <!-- TAB 1: PORTFOLIO -->
@@ -148,6 +151,67 @@
 
       <div id="accounts-cards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         <!-- Rendered dynamically -->
+    <!-- TAB 3: TRANSACTIONS -->
+    <section id="tab-transactions" class="hidden space-y-6">
+      <div class="glass p-5 rounded-2xl flex flex-wrap items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-3">
+          <div>
+            <label class="block text-[11px] font-medium text-gray-400 mb-1">Tili / Lähde</label>
+            <select id="tx-filter-account" class="px-3 py-1.5 text-xs rounded-lg bg-gray-900 border border-gray-700 text-white focus:outline-none">
+              <option value="">Kaikki tilit</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-medium text-gray-400 mb-1">Laji</label>
+            <select id="tx-filter-kind" class="px-3 py-1.5 text-xs rounded-lg bg-gray-900 border border-gray-700 text-white focus:outline-none">
+              <option value="">Kaikki lajit</option>
+              <option value="transfer">Siirrot</option>
+              <option value="trade">Kaupat</option>
+              <option value="deposit">Talletukset</option>
+              <option value="withdrawal">Nostot</option>
+              <option value="approval">Lupakutsut (Approval)</option>
+            </select>
+          </div>
+          <div class="flex items-center pt-5">
+            <label class="flex items-center space-x-2 text-xs text-gray-300 cursor-pointer">
+              <input id="tx-filter-hide-spam" type="checkbox" checked class="w-4 h-4 rounded text-indigo-600 bg-gray-900 border-gray-700 focus:ring-0">
+              <span>Piilota roskatransaktiot</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="flex items-center pt-4">
+          <button id="apply-tx-filters-btn" class="px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition">
+            Hae transaktiot
+          </button>
+        </div>
+      </div>
+
+      <!-- Transactions Table -->
+      <div class="glass rounded-2xl overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-800/80 flex items-center justify-between">
+          <h2 class="font-bold text-sm text-gray-200">Tapahtumahistoria</h2>
+          <span id="tx-count-badge" class="text-xs text-gray-500">0 tapahtumaa</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="text-xs text-gray-400 uppercase bg-gray-900/50 border-b border-gray-800">
+              <tr>
+                <th class="px-6 py-3.5">Aika (UTC)</th>
+                <th class="px-6 py-3.5">Lähde / Tili</th>
+                <th class="px-6 py-3.5">Laji</th>
+                <th class="px-6 py-3.5">Määrä & Token</th>
+                <th class="px-6 py-3.5">Tapahtumatunniste (Hash)</th>
+                <th class="px-6 py-3.5">Status</th>
+              </tr>
+            </thead>
+            <tbody id="transactions-tbody" class="divide-y divide-gray-800/60">
+              <tr>
+                <td colspan="6" class="px-6 py-8 text-center text-gray-500">Ei vielä ladattuja transaktioita.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 

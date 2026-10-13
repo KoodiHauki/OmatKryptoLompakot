@@ -10,8 +10,10 @@ const state = {
 const toastEl = document.getElementById('toast');
 const tabPortfolioBtn = document.getElementById('tab-portfolio-btn');
 const tabAccountsBtn = document.getElementById('tab-accounts-btn');
+const tabTransactionsBtn = document.getElementById('tab-transactions-btn');
 const tabPortfolio = document.getElementById('tab-portfolio');
 const tabAccounts = document.getElementById('tab-accounts');
+const tabTransactions = document.getElementById('tab-transactions');
 
 const addModal = document.getElementById('add-modal');
 const openAddModalBtn = document.getElementById('open-add-modal-btn');
@@ -46,21 +48,25 @@ function showToast(message, type = 'info') {
 // Tab Switching
 function switchTab(tab) {
   state.activeTab = tab;
-  if (tab === 'portfolio') {
-    tabPortfolioBtn.className = 'pb-3 text-sm font-semibold border-b-2 border-indigo-500 text-indigo-400 transition flex items-center';
-    tabAccountsBtn.className = 'pb-3 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center';
-    tabPortfolio.classList.remove('hidden');
-    tabAccounts.classList.add('hidden');
-  } else {
-    tabAccountsBtn.className = 'pb-3 text-sm font-semibold border-b-2 border-indigo-500 text-indigo-400 transition flex items-center';
-    tabPortfolioBtn.className = 'pb-3 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center';
-    tabAccounts.classList.remove('hidden');
-    tabPortfolio.classList.add('hidden');
+  const activeClass = 'pb-3 text-sm font-semibold border-b-2 border-indigo-500 text-indigo-400 transition flex items-center';
+  const inactiveClass = 'pb-3 text-sm font-semibold border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center';
+
+  tabPortfolioBtn.className = tab === 'portfolio' ? activeClass : inactiveClass;
+  tabAccountsBtn.className = tab === 'accounts' ? activeClass : inactiveClass;
+  tabTransactionsBtn.className = tab === 'transactions' ? activeClass : inactiveClass;
+
+  tabPortfolio.classList.toggle('hidden', tab !== 'portfolio');
+  tabAccounts.classList.toggle('hidden', tab !== 'accounts');
+  tabTransactions.classList.toggle('hidden', tab !== 'transactions');
+
+  if (tab === 'transactions') {
+    loadTransactions();
   }
 }
 
 tabPortfolioBtn.addEventListener('click', () => switchTab('portfolio'));
 tabAccountsBtn.addEventListener('click', () => switchTab('accounts'));
+tabTransactionsBtn.addEventListener('click', () => switchTab('transactions'));
 
 // Modal Handlers
 function openModal() { addModal.classList.remove('hidden'); }
@@ -366,8 +372,90 @@ onchainForm.addEventListener('submit', async (e) => {
   }
 });
 
+// Transactions Logic
+async function loadTransactions() {
+  const accountId = document.getElementById('tx-filter-account').value;
+  const kind = document.getElementById('tx-filter-kind').value;
+  const hideSpam = document.getElementById('tx-filter-hide-spam').checked;
+
+  const params = new URLSearchParams();
+  if (accountId) params.append('account_id', accountId);
+  if (kind) params.append('kind', kind);
+  if (!hideSpam) params.append('include_spam', 'true');
+  params.append('limit', '100');
+
+  try {
+    const res = await fetch(`/api/transactions?${params.toString()}`);
+    if (!res.ok) throw new Error('Transaktioiden haku epäonnistui');
+    const data = await res.json();
+    renderTransactions(data.transactions || [], data.total || 0);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function renderTransactions(txs, total) {
+  document.getElementById('tx-count-badge').textContent = `${total} tapahtumaa`;
+  const tbody = document.getElementById('transactions-tbody');
+
+  if (!txs || txs.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">Ei löytyneitä transaktioita annetuilla suodattimilla.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = txs.map(tx => {
+    let kindBadge = '';
+    if (tx.kind === 'trade') {
+      kindBadge = '<span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Kauppa</span>';
+    } else if (tx.kind === 'deposit') {
+      kindBadge = '<span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Talletus</span>';
+    } else if (tx.kind === 'withdrawal') {
+      kindBadge = '<span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Nosto</span>';
+    } else if (tx.kind === 'approval') {
+      kindBadge = '<span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">Lupakutsu (Approval)</span>';
+    } else {
+      kindBadge = '<span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-gray-700/50 text-gray-300 border border-gray-600/30">Siirto</span>';
+    }
+
+    const dt = new Date(tx.timestamp);
+    const timeStr = dt.toLocaleString('fi-FI');
+    const shortHash = tx.hash.length > 16 ? `${tx.hash.slice(0, 10)}...${tx.hash.slice(-6)}` : tx.hash;
+    const tokenSymbol = tx.asset_symbol || (tx.chain === 'ethereum' ? 'ETH' : '');
+    const amountStr = tx.amount ? `${tx.amount} ${tokenSymbol}` : '-';
+
+    let statusBadge = '<span class="text-xs text-gray-400">Vahvistettu</span>';
+    if (tx.is_spam) {
+      statusBadge = `<span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-rose-500/20 text-rose-300 border border-rose-500/30" title="${tx.spam_reason || 'Roskatransaktio'}">Roska</span>`;
+    }
+
+    return `
+      <tr class="hover:bg-gray-800/30 transition text-xs">
+        <td class="px-6 py-3.5 font-mono text-gray-300">${timeStr}</td>
+        <td class="px-6 py-3.5 font-medium text-white">${tx.account_name} <span class="text-[10px] text-gray-500 uppercase font-mono">(${tx.venue})</span></td>
+        <td class="px-6 py-3.5">${kindBadge}</td>
+        <td class="px-6 py-3.5 font-mono font-medium text-gray-200">${amountStr}</td>
+        <td class="px-6 py-3.5 font-mono text-indigo-400" title="${tx.hash}">${shortHash}</td>
+        <td class="px-6 py-3.5">${statusBadge}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+document.getElementById('apply-tx-filters-btn').addEventListener('click', loadTransactions);
+document.getElementById('tx-filter-hide-spam').addEventListener('change', loadTransactions);
+
+// Update account select in transactions tab
+function updateAccountSelect(accounts) {
+  const sel = document.getElementById('tx-filter-account');
+  const currentVal = sel.value;
+  sel.innerHTML = '<option value="">Kaikki tilit</option>' + accounts.map(a => `<option value="${a.id}">${a.name} (${a.venue})</option>`).join('');
+  sel.value = currentVal;
+}
+
 // Initial Load
 document.addEventListener('DOMContentLoaded', () => {
   loadPortfolio();
-  loadAccounts();
+  loadAccounts().then(() => {
+    updateAccountSelect(state.accounts);
+  });
 });

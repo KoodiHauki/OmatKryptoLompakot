@@ -182,3 +182,108 @@ class EvmConnector:
             )
 
         return True
+
+    def fetch_transactions(self, address: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Hakee Blockscoutista lompakon viimeisimmät transaktiot."""
+        import json
+        checksum_addr = Web3.to_checksum_address(address)
+        url = f"{self.blockscout_url}/addresses/{checksum_addr}/transactions"
+
+        txs: List[Dict[str, Any]] = []
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.get(url)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    items = data.get("items", [])[:limit]
+                    for item in items:
+                        tx_hash = item.get("hash", "")
+                        timestamp = item.get("timestamp", utc_now_iso())
+                        method = (item.get("method") or "").lower()
+                        from_addr = item.get("from", {}).get("hash", "")
+                        to_addr = item.get("to", {}).get("hash", "")
+
+                        # Tunnistetaan transaktion laji
+                        kind = "transfer"
+                        if "approve" in method:
+                            kind = "approval"
+                        elif method in ("trade", "swap", "multicall"):
+                            kind = "trade"
+
+                        raw_value = item.get("value", "0")
+                        val_eth = Decimal(str(raw_value)) / Decimal(10**18)
+
+                        fee_raw = item.get("fee", {}).get("value", "0")
+                        fee_eth = (Decimal(str(fee_raw)) / Decimal(10**18)) if fee_raw else None
+
+                        txs.append({
+                            "hash": tx_hash,
+                            "log_index": 0,
+                            "timestamp": timestamp,
+                            "kind": kind,
+                            "from_address": from_addr,
+                            "to_address": to_addr,
+                            "asset_id": f"{self.chain}:native",
+                            "amount": f"{val_eth:f}",
+                            "fee": f"{fee_eth:f} ETH" if fee_eth else None,
+                            "contract_address": None,
+                            "raw_json": json.dumps(item)
+                        })
+        except Exception as e:
+            logger.warning(f"Blockscout transaktioiden haku epäonnistui osoitteelle {address}: {e}")
+
+        return txs
+
+    def sync_transactions_to_database(self, account_id: str, address: str, db: Database, limit: int = 50) -> int:
+        """Hakee ja tallentaa lohkoketjutransaktiot kantaan roskasuodatettuna."""
+        from ...services.spam_filter import SpamFilter
+        spam_filter = SpamFilter(db)
+
+        txs = self.fetch_transactions(address, limit=limit)
+        saved_count = 0
+
+        # Varmistetaan että natiivi asset_id on olemassa (Foreign Key)
+        native_asset_id = f"{self.chain}:native"
+        db.execute(
+            """
+            INSERT INTO assets (id, chain, symbol, display_group)
+            VALUES (?, ?, 'ETH', 'ETH')
+            ON CONFLICT(id) DO NOTHING;
+            """,
+            (native_asset_id, self.chain)
+        )
+
+        for tx in txs:
+            tx_id = f"evm_{account_id}_{tx['hash']}_{tx['log_index']}"
+            is_spam, reason = spam_filter.evaluate_transaction(
+                chain=self.chain,
+                kind=tx["kind"],
+                amount=tx["amount"],
+                contract_address=tx.get("contract_address"),
+                has_price=True
+            )
+
+            db.execute(
+                """
+                INSERT INTO transactions (
+                    id, account_id, chain, hash, log_index, timestamp,
+                    kind, from_address, to_address, asset_id, amount, fee,
+                    is_spam, spam_reason, raw_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(account_id, chain, hash, log_index) DO UPDATE SET
+                    timestamp = excluded.timestamp,
+                    amount = excluded.amount,
+                    is_spam = excluded.is_spam,
+                    spam_reason = excluded.spam_reason,
+                    raw_json = excluded.raw_json;
+                """,
+                (
+                    tx_id, account_id, self.chain, tx["hash"], tx["log_index"], tx["timestamp"],
+                    tx["kind"], tx["from_address"], tx["to_address"], tx["asset_id"], tx["amount"],
+                    tx["fee"], 1 if is_spam else 0, reason, tx["raw_json"]
+                )
+            )
+            saved_count += 1
+
+        return saved_count

@@ -21,7 +21,7 @@ SUPPORTED_EVM_CHAINS: Dict[str, Dict[str, Any]] = {
         "decimals": 18,
         "coingecko_id": "ethereum",
         "display_group": "ETH",
-        "default_rpc": "https://eth.llamarpc.com",
+        "default_rpc": "https://cloudflare-eth.com",
         "default_blockscout": "https://eth.blockscout.com/api/v2",
     },
     "polygon": {
@@ -30,7 +30,7 @@ SUPPORTED_EVM_CHAINS: Dict[str, Dict[str, Any]] = {
         "decimals": 18,
         "coingecko_id": "polygon-ecosystem-token",
         "display_group": "POL",
-        "default_rpc": "https://polygon-rpc.com",
+        "default_rpc": "https://polygon-bor-rpc.publicnode.com",
         "default_blockscout": "https://polygon.blockscout.com/api/v2",
     },
     "arbitrum": {

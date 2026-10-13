@@ -1,0 +1,30 @@
+# OmatKryptoLompakot käynnistyskonfiguraatio
+
+server:
+  bind: "0.0.0.0"
+  port: 8000
+  base_url: "http://127.0.0.1:8000"
+
+database:
+  # Tyhjä tarkoittaa OS:n standardia datahakemistoa:
+  # Windows: %LOCALAPPDATA%\OmatKryptoLompakot\wallets.db
+  # Linux: ~/.local/share/omatkryptolompakot/wallets.db
+  path: ""
+
+sync:
+  cooldown_seconds: 300       # 5 min lähdekohtainen jäähdytysaika
+  balance_interval_hours: 1   # Saldot päivitetään oletuksena tunnin välein
+  tx_interval_hours: 6        # Transaktiot päivitetään oletuksena 6h välein
+  history_default_days: 90    # Ensimmäisen historiapäivityksen oletusikkuna (90 pv)
+
+display:
+  default_currency: "EUR"
+  secondary_currency: "USD"
+
+indexers:
+  ethereum: "blockscout"      # tai alchemy / etherscan
+  arbitrum: "blockscout"
+  base: "blockscout"
+  polygon: "blockscout"
+  optimism: "blockscout"
+  bitcoin: "mempool.space"

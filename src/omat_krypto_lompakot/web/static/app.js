@@ -376,14 +376,22 @@ onchainForm.addEventListener('submit', async (e) => {
 
 // Transactions Logic
 async function loadTransactions() {
-  const accountId = document.getElementById('tx-filter-account').value;
-  const kind = document.getElementById('tx-filter-kind').value;
-  const hideSpam = document.getElementById('tx-filter-hide-spam').checked;
+  const accountSelect = document.getElementById('tx-filter-account');
+  const chainSelect = document.getElementById('tx-filter-chain');
+  const kindSelect = document.getElementById('tx-filter-kind');
+  const searchInput = document.getElementById('tx-filter-search');
+  const dateFromInput = document.getElementById('tx-filter-date-from');
+  const dateToInput = document.getElementById('tx-filter-date-to');
+  const hideSpamCheckbox = document.getElementById('tx-filter-hide-spam');
 
   const params = new URLSearchParams();
-  if (accountId) params.append('account_id', accountId);
-  if (kind) params.append('kind', kind);
-  if (!hideSpam) params.append('include_spam', 'true');
+  if (accountSelect && accountSelect.value) params.append('account_id', accountSelect.value);
+  if (chainSelect && chainSelect.value) params.append('chain', chainSelect.value);
+  if (kindSelect && kindSelect.value) params.append('kind', kindSelect.value);
+  if (searchInput && searchInput.value.trim()) params.append('search', searchInput.value.trim());
+  if (dateFromInput && dateFromInput.value) params.append('date_from', dateFromInput.value);
+  if (dateToInput && dateToInput.value) params.append('date_to', dateToInput.value);
+  if (hideSpamCheckbox && !hideSpamCheckbox.checked) params.append('include_spam', 'true');
   params.append('limit', '100');
 
   try {
@@ -392,16 +400,18 @@ async function loadTransactions() {
     const data = await res.json();
     renderTransactions(data.transactions || [], data.total || 0);
   } catch (err) {
-    console.error(err);
+    console.error('Virhe transaktioiden latauksessa:', err);
   }
 }
 
 function renderTransactions(txs, total) {
-  document.getElementById('tx-count-badge').textContent = `${total} tapahtumaa`;
+  const countBadge = document.getElementById('tx-count-badge');
+  if (countBadge) countBadge.textContent = `${total} tapahtumaa`;
   const tbody = document.getElementById('transactions-tbody');
+  if (!tbody) return;
 
   if (!txs || txs.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-8 text-center text-gray-500">Ei löytyneitä transaktioita annetuilla suodattimilla.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="px-6 py-8 text-center text-gray-500">Ei löytyneitä transaktioita annetuilla suodattimilla.</td></tr>`;
     return;
   }
 
@@ -414,16 +424,18 @@ function renderTransactions(txs, total) {
     } else if (tx.kind === 'withdrawal') {
       kindBadge = '<span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">Nosto</span>';
     } else if (tx.kind === 'approval') {
-      kindBadge = '<span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">Lupakutsu (Approval)</span>';
+      kindBadge = '<span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">Lupakutsu</span>';
     } else {
       kindBadge = '<span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-gray-700/50 text-gray-300 border border-gray-600/30">Siirto</span>';
     }
 
     const dt = new Date(tx.timestamp);
-    const timeStr = dt.toLocaleString('fi-FI');
-    const shortHash = tx.hash.length > 16 ? `${tx.hash.slice(0, 10)}...${tx.hash.slice(-6)}` : tx.hash;
-    const tokenSymbol = tx.asset_symbol || (tx.chain === 'ethereum' ? 'ETH' : '');
-    const amountStr = tx.amount ? `${tx.amount} ${tokenSymbol}` : '-';
+    const timeStr = isNaN(dt.getTime()) ? tx.timestamp : dt.toLocaleString('fi-FI');
+    const shortHash = tx.hash && tx.hash.length > 16 ? `${tx.hash.slice(0, 8)}...${tx.hash.slice(-6)}` : (tx.hash || '-');
+    const tokenSymbol = tx.asset_symbol || (tx.chain === 'ethereum' ? 'ETH' : (tx.chain === 'solana' ? 'SOL' : (tx.chain === 'bitcoin' ? 'BTC' : '')));
+    const amountStr = tx.amount ? `${tx.amount} ${tokenSymbol}`.trim() : '-';
+    const histVal = tx.historical_value ? `<span class="font-semibold text-emerald-400">${tx.historical_value}</span>` : '<span class="text-gray-500">-</span>';
+    const chainBadge = `<span class="px-2 py-0.5 text-[10px] uppercase font-mono rounded bg-gray-800 text-gray-300 border border-gray-700/60">${tx.chain}</span>`;
 
     let statusBadge = '<span class="text-xs text-gray-400">Vahvistettu</span>';
     if (tx.is_spam) {
@@ -432,19 +444,55 @@ function renderTransactions(txs, total) {
 
     return `
       <tr class="hover:bg-gray-800/30 transition text-xs">
-        <td class="px-6 py-3.5 font-mono text-gray-300">${timeStr}</td>
-        <td class="px-6 py-3.5 font-medium text-white">${tx.account_name} <span class="text-[10px] text-gray-500 uppercase font-mono">(${tx.venue})</span></td>
-        <td class="px-6 py-3.5">${kindBadge}</td>
-        <td class="px-6 py-3.5 font-mono font-medium text-gray-200">${amountStr}</td>
-        <td class="px-6 py-3.5 font-mono text-indigo-400" title="${tx.hash}">${shortHash}</td>
-        <td class="px-6 py-3.5">${statusBadge}</td>
+        <td class="px-5 py-3.5 font-mono text-gray-300">${timeStr}</td>
+        <td class="px-5 py-3.5 font-medium text-white">${tx.account_name}</td>
+        <td class="px-5 py-3.5">${chainBadge}</td>
+        <td class="px-5 py-3.5">${kindBadge}</td>
+        <td class="px-5 py-3.5 font-mono font-medium text-gray-200">${amountStr}</td>
+        <td class="px-5 py-3.5 font-mono">${histVal}</td>
+        <td class="px-5 py-3.5 font-mono text-indigo-400" title="${tx.hash}">${shortHash}</td>
+        <td class="px-5 py-3.5">${statusBadge}</td>
       </tr>
     `;
   }).join('');
 }
 
-document.getElementById('apply-tx-filters-btn').addEventListener('click', loadTransactions);
-document.getElementById('tx-filter-hide-spam').addEventListener('change', loadTransactions);
+// Event Listeners for Transaction Filters
+const applyTxFiltersBtn = document.getElementById('apply-tx-filters-btn');
+if (applyTxFiltersBtn) applyTxFiltersBtn.addEventListener('click', loadTransactions);
+
+const resetTxFiltersBtn = document.getElementById('reset-tx-filters-btn');
+if (resetTxFiltersBtn) {
+  resetTxFiltersBtn.addEventListener('click', () => {
+    const acc = document.getElementById('tx-filter-account');
+    const ch = document.getElementById('tx-filter-chain');
+    const k = document.getElementById('tx-filter-kind');
+    const s = document.getElementById('tx-filter-search');
+    const df = document.getElementById('tx-filter-date-from');
+    const dt = document.getElementById('tx-filter-date-to');
+    const sp = document.getElementById('tx-filter-hide-spam');
+    if (acc) acc.value = '';
+    if (ch) ch.value = '';
+    if (k) k.value = '';
+    if (s) s.value = '';
+    if (df) df.value = '';
+    if (dt) dt.value = '';
+    if (sp) sp.checked = true;
+    loadTransactions();
+  });
+}
+
+const txHideSpam = document.getElementById('tx-filter-hide-spam');
+if (txHideSpam) txHideSpam.addEventListener('change', loadTransactions);
+
+const txSearchInput = document.getElementById('tx-filter-search');
+if (txSearchInput) {
+  txSearchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      loadTransactions();
+    }
+  });
+}
 
 const syncAllTxsBtn = document.getElementById('sync-all-txs-btn');
 if (syncAllTxsBtn) {
@@ -467,8 +515,9 @@ if (syncAllTxsBtn) {
 // Update account select in transactions tab
 function updateAccountSelect(accounts) {
   const sel = document.getElementById('tx-filter-account');
+  if (!sel) return;
   const currentVal = sel.value;
-  sel.innerHTML = '<option value="">Kaikki tilit</option>' + accounts.map(a => `<option value="${a.id}">${a.name} (${a.venue})</option>`).join('');
+  sel.innerHTML = '<option value="">Kaikki tilit</option>' + (accounts || []).map(a => `<option value="${a.id}">${a.name} (${a.venue})</option>`).join('');
   sel.value = currentVal;
 }
 

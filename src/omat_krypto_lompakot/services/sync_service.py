@@ -10,7 +10,7 @@ from ..connectors.cex.binance import BinanceConnector
 from ..connectors.onchain.evm import EvmConnector, SUPPORTED_EVM_CHAINS
 from ..connectors.onchain.bitcoin import BitcoinConnector
 from ..connectors.onchain.solana import SolanaConnector
-from ..connectors.pricing.coingecko import CoinGeckoClient
+from ..connectors.pricing.binance_pricing import BinancePricingClient
 from ..db.database import Database
 from ..db.models import utc_now_iso
 from ..secrets.keyring_store import KeyringStore
@@ -23,7 +23,7 @@ class SyncService:
         self.db = db
         self.keyring_store = keyring_store
         self.cooldown_seconds = cooldown_seconds
-        self.pricing_client = CoinGeckoClient(db)
+        self.pricing_client = BinancePricingClient(db)
 
     def _is_in_cooldown(self, account_id: str) -> bool:
         row = self.db.fetch_one("SELECT last_balance_sync_at FROM sync_state WHERE account_id = ?;", (account_id,))
@@ -204,21 +204,8 @@ class SyncService:
             return {"status": "error", "account_id": account_id, "message": str(e)}
 
     def _update_prices_for_active_assets(self) -> None:
-        """Hakee kurssit CoinGeckosta kaikille positiivisille saldoille."""
-        assets = self.db.fetch_all(
-            """
-            SELECT DISTINCT a.id, a.symbol, a.coingecko_id
-            FROM assets a
-            JOIN balances b ON a.id = b.asset_id
-            WHERE CAST(b.amount AS NUMERIC) > 0;
-            """
-        )
-
-        cg_ids_to_fetch = set()
-        for a in assets:
-            cid = self.pricing_client.resolve_coingecko_id(a["symbol"], a["coingecko_id"])
-            if cid:
-                cg_ids_to_fetch.add(cid)
-
-        if cg_ids_to_fetch:
-            self.pricing_client.fetch_prices(list(cg_ids_to_fetch), vs_currencies=["EUR", "USD"])
+        """Hakee kurssit Binancesta (ja varalle CoinGeckosta) kaikille positiivisille saldoille."""
+        try:
+            self.pricing_client.update_prices_for_assets()
+        except Exception as e:
+            logger.warning(f"Virhe kurssien päivityksessä: {e}")

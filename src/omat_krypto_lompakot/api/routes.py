@@ -1,7 +1,9 @@
 """FastAPI REST -reitit tilien, portfolioiden ja synkronoinnin hallintaan."""
 
+import json
 import re
 import uuid
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -63,7 +65,9 @@ def get_services(db: Database) -> tuple[PortfolioAggregator, SyncService, Keyrin
 @router.get("/portfolio", response_model=PortfolioSummary)
 def get_portfolio():
     from .server import db
-    aggregator, _, _ = get_services(db)
+    aggregator, sync_service, _ = get_services(db)
+    # Päivitetään kurssit BinancePricingClientilla (välimuistissa 60s TTL)
+    sync_service._update_prices_for_active_assets()
     return aggregator.get_portfolio()
 
 
@@ -351,11 +355,48 @@ class TokenOverrideRequest(BaseModel):
     notes: Optional[str] = None
 
 
+def _extract_historical_value(row: Dict[str, Any]) -> Optional[str]:
+    raw_str = row.get("raw_json")
+    if not raw_str:
+        return None
+    try:
+        raw = json.loads(raw_str)
+        # 1. Kaupat (Trades)
+        if row.get("kind") == "trade":
+            cost = raw.get("cost")
+            pair = raw.get("pair") or ""
+            quote = "EUR" if "EUR" in pair else ("USD" if "USD" in pair else "")
+            if cost:
+                cost_dec = Decimal(str(cost))
+                return f"{cost_dec:,.2f} {quote}".strip()
+            price = raw.get("price")
+            amount = row.get("amount")
+            if price and amount:
+                total = Decimal(str(price)) * Decimal(str(amount))
+                return f"{total:,.2f} {quote}".strip()
+
+        # 2. Fiat-talletukset ja -nostot
+        elif row.get("kind") in ("deposit", "withdrawal"):
+            asset = str(raw.get("asset", "")).upper()
+            if asset in ("ZEUR", "EUR"):
+                amt = Decimal(str(raw.get("amount", row.get("amount") or 0)))
+                return f"{amt:,.2f} EUR"
+            elif asset in ("ZUSD", "USD"):
+                amt = Decimal(str(raw.get("amount", row.get("amount") or 0)))
+                return f"{amt:,.2f} USD"
+    except Exception:
+        pass
+    return None
+
+
 @router.get("/transactions")
 def list_transactions(
     chain: Optional[str] = None,
     account_id: Optional[str] = None,
     kind: Optional[str] = None,
+    search: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
     include_spam: bool = False,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0)
@@ -365,24 +406,36 @@ def list_transactions(
     conditions = []
     params = []
 
-    if chain:
+    if chain and chain.strip():
         conditions.append("t.chain = ?")
-        params.append(chain)
-    if account_id:
+        params.append(chain.strip().lower())
+    if account_id and account_id.strip():
         conditions.append("t.account_id = ?")
-        params.append(account_id)
-    if kind:
+        params.append(account_id.strip())
+    if kind and kind.strip():
         conditions.append("t.kind = ?")
-        params.append(kind)
+        params.append(kind.strip().lower())
     if not include_spam:
         conditions.append("t.is_spam = 0")
+    if date_from and date_from.strip():
+        val = date_from.strip()
+        conditions.append("t.timestamp >= ?")
+        params.append(val if "T" in val else f"{val}T00:00:00")
+    if date_to and date_to.strip():
+        val = date_to.strip()
+        conditions.append("t.timestamp <= ?")
+        params.append(val if "T" in val else f"{val}T23:59:59")
+    if search and search.strip():
+        s_term = f"%{search.strip()}%"
+        conditions.append("(t.hash LIKE ? OR t.from_address LIKE ? OR t.to_address LIKE ? OR a.symbol LIKE ? OR acc.name LIKE ?)")
+        params.extend([s_term, s_term, s_term, s_term, s_term])
 
     where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
     query = f"""
         SELECT 
             t.id, t.account_id, t.chain, t.hash, t.log_index, t.timestamp,
             t.kind, t.from_address, t.to_address, t.asset_id, t.amount, t.fee,
-            t.is_spam, t.spam_reason,
+            t.is_spam, t.spam_reason, t.raw_json,
             acc.name as account_name, acc.venue,
             a.symbol as asset_symbol, a.display_group
         FROM transactions t
@@ -392,19 +445,32 @@ def list_transactions(
         ORDER BY t.timestamp DESC
         LIMIT ? OFFSET ?;
     """
-    params.extend([limit, offset])
-    txs = db.fetch_all(query, tuple(params))
+    p_with_paging = list(params)
+    p_with_paging.extend([limit, offset])
+    raw_txs = db.fetch_all(query, tuple(p_with_paging))
 
-    count_query = f"SELECT count(*) as total FROM transactions t {where_clause};"
-    count_params = tuple(params[:-2])
-    total_row = db.fetch_one(count_query, count_params)
+    count_query = f"""
+        SELECT count(*) as total 
+        FROM transactions t 
+        JOIN accounts acc ON t.account_id = acc.id
+        LEFT JOIN assets a ON t.asset_id = a.id
+        {where_clause};
+    """
+    total_row = db.fetch_one(count_query, tuple(params))
     total_count = total_row["total"] if total_row else 0
+
+    results = []
+    for tx in raw_txs:
+        t_dict = dict(tx)
+        t_dict["historical_value"] = _extract_historical_value(t_dict)
+        t_dict.pop("raw_json", None)
+        results.append(t_dict)
 
     return {
         "total": total_count,
         "limit": limit,
         "offset": offset,
-        "transactions": txs
+        "transactions": results
     }
 
 

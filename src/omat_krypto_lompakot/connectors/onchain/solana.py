@@ -15,6 +15,15 @@ DEFAULT_SOLANA_RPC = "https://api.mainnet-beta.solana.com"
 BASE58_ALPHABET = set("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
 SPL_TOKEN_PROGRAM_ID = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 
+KNOWN_SPL_MINTS: Dict[str, Dict[str, str]] = {
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": {"symbol": "USDC", "name": "USD Coin", "display_group": "USDC"},
+    "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": {"symbol": "USDT", "name": "Tether USD", "display_group": "USDT"},
+    "So11111111111111111111111111111111111111112": {"symbol": "WSOL", "name": "Wrapped SOL", "display_group": "SOL"},
+    "mSoLzYCIlBmHd67rhqqS5EZygvtYQtB58b9rCgnNw7g": {"symbol": "MSOL", "name": "Marinade staked SOL", "display_group": "SOL"},
+    "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn": {"symbol": "JitoSOL", "name": "Jito Staked SOL", "display_group": "SOL"},
+    "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263": {"symbol": "BONK", "name": "Bonk", "display_group": "BONK"},
+}
+
 
 class SolanaConnector:
     def __init__(
@@ -83,10 +92,15 @@ class SolanaConnector:
                 try:
                     dec_val = Decimal(ui_amount_str)
                     if dec_val > 0:
-                        symbol = f"{mint[:4]}...{mint[-4:]}"
+                        known = KNOWN_SPL_MINTS.get(mint)
+                        symbol = known["symbol"] if known else f"{mint[:4]}...{mint[-4:]}"
+                        name = known["name"] if known else f"SPL {symbol}"
+                        disp_group = known["display_group"] if known else symbol
                         tokens.append({
                             "contract_address": mint,
                             "symbol": symbol,
+                            "name": name,
+                            "display_group": disp_group,
                             "decimals": decimals,
                             "amount": f"{dec_val:f}"
                         })
@@ -176,9 +190,11 @@ class SolanaConnector:
                 INSERT INTO assets (id, chain, contract_address, symbol, name, decimals, display_group)
                 VALUES (?, 'solana', ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
-                    symbol = excluded.symbol;
+                    symbol = excluded.symbol,
+                    name = excluded.name,
+                    display_group = excluded.display_group;
                 """,
-                (asset_id, mint, tok["symbol"], f"SPL {tok['symbol']}", tok["decimals"], tok["symbol"])
+                (asset_id, mint, tok["symbol"], tok.get("name", f"SPL {tok['symbol']}"), tok["decimals"], tok.get("display_group", tok["symbol"]))
             )
 
             bal_id = f"{account_id}:{asset_id}:wallet"

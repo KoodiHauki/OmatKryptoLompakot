@@ -21,7 +21,12 @@ SUPPORTED_EVM_CHAINS: Dict[str, Dict[str, Any]] = {
         "decimals": 18,
         "coingecko_id": "ethereum",
         "display_group": "ETH",
-        "default_rpc": "https://cloudflare-eth.com",
+        "default_rpc": "https://ethereum-rpc.publicnode.com",
+        "rpc_pool": [
+            "https://ethereum-rpc.publicnode.com",
+            "https://1rpc.io/eth",
+            "https://cloudflare-eth.com"
+        ],
         "default_blockscout": "https://eth.blockscout.com/api/v2",
     },
     "polygon": {
@@ -31,6 +36,11 @@ SUPPORTED_EVM_CHAINS: Dict[str, Dict[str, Any]] = {
         "coingecko_id": "polygon-ecosystem-token",
         "display_group": "POL",
         "default_rpc": "https://polygon-bor-rpc.publicnode.com",
+        "rpc_pool": [
+            "https://polygon-bor-rpc.publicnode.com",
+            "https://1rpc.io/matic",
+            "https://polygon-rpc.com"
+        ],
         "default_blockscout": "https://polygon.blockscout.com/api/v2",
     },
     "arbitrum": {
@@ -40,6 +50,11 @@ SUPPORTED_EVM_CHAINS: Dict[str, Dict[str, Any]] = {
         "coingecko_id": "ethereum",
         "display_group": "ETH",
         "default_rpc": "https://arb1.arbitrum.io/rpc",
+        "rpc_pool": [
+            "https://arb1.arbitrum.io/rpc",
+            "https://arbitrum-one-rpc.publicnode.com",
+            "https://1rpc.io/arb"
+        ],
         "default_blockscout": "https://arbitrum.blockscout.com/api/v2",
     },
     "base": {
@@ -49,6 +64,11 @@ SUPPORTED_EVM_CHAINS: Dict[str, Dict[str, Any]] = {
         "coingecko_id": "ethereum",
         "display_group": "ETH",
         "default_rpc": "https://mainnet.base.org",
+        "rpc_pool": [
+            "https://mainnet.base.org",
+            "https://base-rpc.publicnode.com",
+            "https://1rpc.io/base"
+        ],
         "default_blockscout": "https://base.blockscout.com/api/v2",
     },
     "optimism": {
@@ -58,8 +78,18 @@ SUPPORTED_EVM_CHAINS: Dict[str, Dict[str, Any]] = {
         "coingecko_id": "ethereum",
         "display_group": "ETH",
         "default_rpc": "https://mainnet.optimism.io",
+        "rpc_pool": [
+            "https://mainnet.optimism.io",
+            "https://optimism-rpc.publicnode.com",
+            "https://1rpc.io/op"
+        ],
         "default_blockscout": "https://optimism.blockscout.com/api/v2",
     },
+}
+
+DEFAULT_HTTP_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json"
 }
 
 
@@ -79,22 +109,36 @@ class EvmConnector:
         self.native_coingecko_id = chain_info["coingecko_id"]
         self.native_display_group = chain_info["display_group"]
 
+        self.rpc_pool = list(chain_info.get("rpc_pool", [chain_info["default_rpc"]]))
+        if rpc_url and rpc_url not in self.rpc_pool:
+            self.rpc_pool.insert(0, rpc_url)
         self.rpc_url = rpc_url or chain_info["default_rpc"]
         self.blockscout_url = blockscout_url or chain_info["default_blockscout"]
-        if w3_instance:
-            self.w3 = w3_instance
-        else:
-            self.w3 = Web3(Web3.HTTPProvider(self.rpc_url, request_kwargs={"timeout": 10}))
+        self.w3 = w3_instance
 
     def is_valid_address(self, address: str) -> bool:
         return Web3.is_address(address)
 
     def fetch_native_balance(self, address: str) -> str:
-        """Hakee ketjun natiivikolikon (esim. ETH tai POL) saldon julkiselta RPC-solmulta."""
+        """Hakee ketjun natiivikolikon (esim. ETH tai POL) saldon julkiselta RPC-solmulta automaattisella failoverilla."""
         checksum_addr = Web3.to_checksum_address(address)
-        wei_balance = self.w3.eth.get_balance(checksum_addr)
-        scaled_balance = Decimal(wei_balance) / Decimal(10**self.native_decimals)
-        return f"{scaled_balance:f}"
+        if self.w3:
+            wei_balance = self.w3.eth.get_balance(checksum_addr)
+            scaled_balance = Decimal(wei_balance) / Decimal(10**self.native_decimals)
+            return f"{scaled_balance:f}"
+
+        last_error = None
+        for rpc in self.rpc_pool:
+            try:
+                w3 = Web3(Web3.HTTPProvider(rpc, request_kwargs={"timeout": 6}))
+                wei_balance = w3.eth.get_balance(checksum_addr)
+                scaled_balance = Decimal(wei_balance) / Decimal(10**self.native_decimals)
+                return f"{scaled_balance:f}"
+            except Exception as e:
+                logger.warning(f"RPC {rpc} epäonnistui osoitteelle {address} ({self.chain}): {e}")
+                last_error = e
+
+        raise RuntimeError(f"Kaikki RPC-solmut epäonnistuivat ketjulle {self.chain}: {last_error}")
 
     def fetch_erc20_tokens(self, address: str) -> List[Dict[str, Any]]:
         """Hakee ERC-20 tokenit ja saldot Blockscout v2 -rajapinnasta."""
@@ -103,7 +147,7 @@ class EvmConnector:
 
         tokens: List[Dict[str, Any]] = []
         try:
-            with httpx.Client(timeout=10.0) as client:
+            with httpx.Client(timeout=10.0, headers=DEFAULT_HTTP_HEADERS) as client:
                 resp = client.get(url)
                 if resp.status_code == 200:
                     data = resp.json()
@@ -265,7 +309,7 @@ class EvmConnector:
 
         txs: List[Dict[str, Any]] = []
         try:
-            with httpx.Client(timeout=10.0) as client:
+            with httpx.Client(timeout=10.0, headers=DEFAULT_HTTP_HEADERS) as client:
                 resp = client.get(url)
                 if resp.status_code == 200:
                     data = resp.json()

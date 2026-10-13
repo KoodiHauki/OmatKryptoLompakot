@@ -446,6 +446,24 @@ function renderTransactions(txs, total) {
 document.getElementById('apply-tx-filters-btn').addEventListener('click', loadTransactions);
 document.getElementById('tx-filter-hide-spam').addEventListener('change', loadTransactions);
 
+const syncAllTxsBtn = document.getElementById('sync-all-txs-btn');
+if (syncAllTxsBtn) {
+  syncAllTxsBtn.addEventListener('click', async () => {
+    showToast('Synkronoidaan tapahtumia lohkoketjuista ja pörsseistä...', 'info');
+    try {
+      const res = await fetch('/api/transactions/sync-all', { method: 'POST' });
+      if (res.ok) {
+        showToast('Tapahtumat synkronoitu onnistuneesti!', 'success');
+        loadTransactions();
+      } else {
+        showToast('Virhe tapahtumien synkronoinnissa', 'error');
+      }
+    } catch (err) {
+      showToast('Verkkovirhe synkronoinnissa', 'error');
+    }
+  });
+}
+
 // Update account select in transactions tab
 function updateAccountSelect(accounts) {
   const sel = document.getElementById('tx-filter-account');

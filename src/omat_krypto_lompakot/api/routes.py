@@ -316,6 +316,18 @@ def trigger_tx_sync(req: TxSyncRequest):
     return res
 
 
+@router.post("/transactions/sync-all")
+def trigger_all_tx_sync(limit: int = 50):
+    from .server import db
+    _, sync_service, _ = get_services(db)
+    accounts = db.fetch_all("SELECT id FROM accounts WHERE is_active = 1;")
+    results = []
+    for a in accounts:
+        res = sync_service.sync_account_transactions(a["id"], limit=limit)
+        results.append(res)
+    return {"results": results}
+
+
 @router.delete("/accounts/{account_id}")
 def delete_account(account_id: str):
     from .server import db

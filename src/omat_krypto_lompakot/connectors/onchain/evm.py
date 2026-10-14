@@ -97,6 +97,34 @@ SUPPORTED_EVM_CHAINS: Dict[str, Dict[str, Any]] = {
         ],
         "default_blockscout": "https://robinhoodchain.blockscout.com/api/v2",
     },
+    "bsc": {
+        "name": "BNB Smart Chain",
+        "symbol": "BNB",
+        "decimals": 18,
+        "coingecko_id": "binancecoin",
+        "display_group": "BNB",
+        "default_rpc": "https://bsc-rpc.publicnode.com",
+        "rpc_pool": [
+            "https://bsc-rpc.publicnode.com",
+            "https://1rpc.io/bnb",
+            "https://bsc-dataseed.binance.org"
+        ],
+        "default_blockscout": None,
+    },
+    "binance_smart_chain": {
+        "name": "BNB Smart Chain",
+        "symbol": "BNB",
+        "decimals": 18,
+        "coingecko_id": "binancecoin",
+        "display_group": "BNB",
+        "default_rpc": "https://bsc-rpc.publicnode.com",
+        "rpc_pool": [
+            "https://bsc-rpc.publicnode.com",
+            "https://1rpc.io/bnb",
+            "https://bsc-dataseed.binance.org"
+        ],
+        "default_blockscout": None,
+    },
 }
 
 DEFAULT_HTTP_HEADERS = {
@@ -154,6 +182,8 @@ class EvmConnector:
 
     def fetch_erc20_tokens(self, address: str) -> List[Dict[str, Any]]:
         """Hakee ERC-20 tokenit ja saldot Blockscout v2 -rajapinnasta."""
+        if not self.blockscout_url:
+            return []
         checksum_addr = Web3.to_checksum_address(address)
         url = f"{self.blockscout_url}/addresses/{checksum_addr}/tokens"
 
@@ -316,6 +346,8 @@ class EvmConnector:
 
     def fetch_transactions(self, address: str, limit: int = 50) -> List[Dict[str, Any]]:
         """Hakee Blockscoutista lompakon viimeisimmät transaktiot."""
+        if not self.blockscout_url:
+            return []
         checksum_addr = Web3.to_checksum_address(address)
         url = f"{self.blockscout_url}/addresses/{checksum_addr}/transactions"
 

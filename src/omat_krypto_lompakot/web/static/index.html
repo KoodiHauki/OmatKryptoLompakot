@@ -112,19 +112,55 @@
 
       <!-- Asset Groups Table -->
       <div class="glass rounded-2xl overflow-hidden">
-        <div class="px-6 py-4 border-b border-gray-800/80 flex items-center justify-between">
-          <h2 class="font-bold text-sm text-gray-200">Kryptovarat ryhmittäin</h2>
-          <span id="last-updated-time" class="text-xs text-gray-500">Päivitetty: -</span>
+        <div class="px-6 py-4 border-b border-gray-800/80 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center space-x-3">
+            <h2 class="font-bold text-sm text-gray-200">Kryptovarat ryhmittäin</h2>
+            <span id="portfolio-groups-count" class="px-2 py-0.5 text-[10px] font-mono rounded bg-gray-800 text-gray-400 border border-gray-700">0 erää</span>
+          </div>
+          <div class="flex items-center space-x-3">
+            <div class="relative">
+              <input type="text" id="portfolio-group-search" placeholder="Hae omaisuuserää..." class="w-44 sm:w-56 px-3 py-1.5 pl-8 text-xs bg-gray-900/90 border border-gray-700/80 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition">
+              <svg class="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+              </svg>
+            </div>
+            <span id="last-updated-time" class="text-xs text-gray-500">Päivitetty: -</span>
+          </div>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm">
-            <thead class="text-xs text-gray-400 uppercase bg-gray-900/50 border-b border-gray-800">
+            <thead class="text-xs text-gray-400 uppercase bg-gray-900/50 border-b border-gray-800 select-none">
               <tr>
-                <th class="px-6 py-3.5">Omaisuuserä</th>
-                <th class="px-6 py-3.5">Kokonaismäärä</th>
-                <th class="px-6 py-3.5">Arvo (EUR)</th>
-                <th class="px-6 py-3.5">Arvo (USD)</th>
-                <th class="px-6 py-3.5">Säilytyspaikat</th>
+                <th class="sortable-th px-6 py-3.5 cursor-pointer hover:text-white transition group" data-sort="group_name" title="Järjestä omaisuuserän nimen mukaan">
+                  <div class="flex items-center space-x-1.5">
+                    <span>Omaisuuserä</span>
+                    <span class="sort-icon text-[11px] text-gray-600 group-hover:text-gray-400 transition">↕</span>
+                  </div>
+                </th>
+                <th class="sortable-th px-6 py-3.5 cursor-pointer hover:text-white transition group" data-sort="total_amount" title="Järjestä kokonaismäärän mukaan">
+                  <div class="flex items-center space-x-1.5">
+                    <span>Kokonaismäärä</span>
+                    <span class="sort-icon text-[11px] text-gray-600 group-hover:text-gray-400 transition">↕</span>
+                  </div>
+                </th>
+                <th class="sortable-th px-6 py-3.5 cursor-pointer hover:text-white transition group" data-sort="value_eur" title="Järjestä EUR-arvon mukaan">
+                  <div class="flex items-center space-x-1.5">
+                    <span>Arvo (EUR)</span>
+                    <span class="sort-icon text-[11px] text-gray-600 group-hover:text-gray-400 transition">↕</span>
+                  </div>
+                </th>
+                <th class="sortable-th px-6 py-3.5 cursor-pointer hover:text-white transition group text-indigo-400 font-bold" data-sort="value_usd" title="Järjestä USD-arvon mukaan (oletus)">
+                  <div class="flex items-center space-x-1.5">
+                    <span>Arvo (USD)</span>
+                    <span class="sort-icon text-[11px] text-indigo-400">▼</span>
+                  </div>
+                </th>
+                <th class="sortable-th px-6 py-3.5 cursor-pointer hover:text-white transition group" data-sort="sources" title="Järjestä säilytyspaikkojen määrän mukaan">
+                  <div class="flex items-center space-x-1.5">
+                    <span>Säilytyspaikat</span>
+                    <span class="sort-icon text-[11px] text-gray-600 group-hover:text-gray-400 transition">↕</span>
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody id="portfolio-groups-tbody" class="divide-y divide-gray-800/60">

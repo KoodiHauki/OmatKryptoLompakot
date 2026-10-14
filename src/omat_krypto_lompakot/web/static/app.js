@@ -3,7 +3,12 @@
 const state = {
   activeTab: 'portfolio',
   portfolio: null,
-  accounts: []
+  accounts: [],
+  portfolioSort: {
+    column: 'value_usd',
+    direction: 'desc'
+  },
+  portfolioSearch: ''
 };
 
 // UI Elements
@@ -138,20 +143,113 @@ function renderPortfolio(data) {
     warningsBanner.classList.add('hidden');
   }
 
-  // Table
+  updatePortfolioSortHeaders();
+  renderPortfolioGroups(data.groups || []);
+}
+
+function updatePortfolioSortHeaders() {
+  const ths = document.querySelectorAll('.sortable-th');
+  ths.forEach(th => {
+    const col = th.getAttribute('data-sort');
+    const icon = th.querySelector('.sort-icon');
+    if (!icon) return;
+
+    if (col === state.portfolioSort.column) {
+      th.classList.add('text-indigo-400', 'font-bold');
+      th.classList.remove('text-gray-400');
+      icon.textContent = state.portfolioSort.direction === 'asc' ? '▲' : '▼';
+      icon.className = 'sort-icon text-[11px] text-indigo-400 ml-1 inline-block';
+    } else {
+      th.classList.remove('text-indigo-400', 'font-bold');
+      th.classList.add('text-gray-400');
+      icon.textContent = '↕';
+      icon.className = 'sort-icon text-[11px] text-gray-600 group-hover:text-gray-400 transition ml-1 inline-block';
+    }
+  });
+}
+
+function renderPortfolioGroups(groups) {
   const tbody = document.getElementById('portfolio-groups-tbody');
-  if (!data.groups || data.groups.length === 0) {
+  const countBadge = document.getElementById('portfolio-groups-count');
+  if (!tbody) return;
+
+  if (!groups || groups.length === 0) {
     tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Ei vielä liitettyjä varoja. Lisää yhteys aloittaaksesi!</td></tr>`;
+    if (countBadge) countBadge.textContent = '0 erää';
     return;
   }
 
-  tbody.innerHTML = data.groups.map(g => {
+  // 1. Suodatus hakusanalla
+  let filtered = [...groups];
+  if (state.portfolioSearch) {
+    const q = state.portfolioSearch.toLowerCase();
+    filtered = filtered.filter(g => {
+      const matchName = g.group_name && g.group_name.toLowerCase().includes(q);
+      const matchItems = g.items && g.items.some(it => 
+        (it.symbol && it.symbol.toLowerCase().includes(q)) ||
+        (it.account_name && it.account_name.toLowerCase().includes(q))
+      );
+      return matchName || matchItems;
+    });
+  }
+
+  if (countBadge) {
+    countBadge.textContent = state.portfolioSearch 
+      ? `${filtered.length} / ${groups.length} erää` 
+      : `${filtered.length} erää`;
+  }
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Ei löytynyt omaisuuseriä hakusanalla "${state.portfolioSearch}".</td></tr>`;
+    return;
+  }
+
+  // 2. Järjestäminen valitun sarakkeen mukaan (oletus: value_usd desc)
+  const { column, direction } = state.portfolioSort;
+  const mod = direction === 'asc' ? 1 : -1;
+
+  filtered.sort((a, b) => {
+    let cmp = 0;
+    if (column === 'group_name') {
+      cmp = (a.group_name || '').localeCompare(b.group_name || '');
+    } else if (column === 'total_amount') {
+      const valA = parseFloat(a.total_amount) || 0;
+      const valB = parseFloat(b.total_amount) || 0;
+      cmp = valA - valB;
+    } else if (column === 'value_eur') {
+      const valA = parseFloat(a.value_eur) || 0;
+      const valB = parseFloat(b.value_eur) || 0;
+      cmp = valA - valB;
+    } else if (column === 'value_usd') {
+      const valA = parseFloat(a.value_usd) || 0;
+      const valB = parseFloat(b.value_usd) || 0;
+      cmp = valA - valB;
+    } else if (column === 'sources') {
+      const countA = a.items ? a.items.length : 0;
+      const countB = b.items ? b.items.length : 0;
+      cmp = countA - countB;
+    }
+
+    if (cmp !== 0) {
+      return cmp * mod;
+    }
+
+    // Toissijainen tasapelin ratkaisija: arvo USD laskevasti, sitten nimi A-Z
+    const fallbackUsdA = parseFloat(a.value_usd) || 0;
+    const fallbackUsdB = parseFloat(b.value_usd) || 0;
+    if (fallbackUsdB !== fallbackUsdA) {
+      return fallbackUsdB - fallbackUsdA;
+    }
+    return (a.group_name || '').localeCompare(b.group_name || '');
+  });
+
+  tbody.innerHTML = filtered.map(g => {
     const eurVal = g.value_eur ? (parseFloat(g.value_eur) || 0).toLocaleString('fi-FI', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €' : '-';
     const usdVal = g.value_usd ? '$' + (parseFloat(g.value_usd) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
     
     // Details pills
-    const detailsPills = g.items.map(it => {
-      return `<span class="inline-block px-2 py-0.5 text-[11px] rounded bg-gray-800 text-gray-300 mr-1.5 border border-gray-700/60 font-mono">${it.account_name}: ${it.amount} ${it.symbol}</span>`;
+    const detailsPills = (g.items || []).map(it => {
+      return `<span class="inline-block px-2 py-0.5 text-[11px] rounded bg-gray-800 text-gray-300 mr-1.5 mb-1 border border-gray-700/60 font-mono">${it.account_name}: ${it.amount} ${it.symbol}</span>`;
     }).join('');
 
     return `
@@ -519,6 +617,37 @@ function updateAccountSelect(accounts) {
   const currentVal = sel.value;
   sel.innerHTML = '<option value="">Kaikki tilit</option>' + (accounts || []).map(a => `<option value="${a.id}">${a.name} (${a.venue})</option>`).join('');
   sel.value = currentVal;
+}
+
+// Portfolio sortable headers click events
+document.querySelectorAll('.sortable-th').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.getAttribute('data-sort');
+    if (!col) return;
+    if (state.portfolioSort.column === col) {
+      // Toggle ascending / descending
+      state.portfolioSort.direction = state.portfolioSort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+      state.portfolioSort.column = col;
+      // Default: A-Z for names, high-to-low (desc) for numbers/values
+      state.portfolioSort.direction = col === 'group_name' ? 'asc' : 'desc';
+    }
+    updatePortfolioSortHeaders();
+    if (state.portfolio && state.portfolio.groups) {
+      renderPortfolioGroups(state.portfolio.groups);
+    }
+  });
+});
+
+// Portfolio search input
+const portfolioSearchInput = document.getElementById('portfolio-group-search');
+if (portfolioSearchInput) {
+  portfolioSearchInput.addEventListener('input', (e) => {
+    state.portfolioSearch = e.target.value.trim();
+    if (state.portfolio && state.portfolio.groups) {
+      renderPortfolioGroups(state.portfolio.groups);
+    }
+  });
 }
 
 // Initial Load

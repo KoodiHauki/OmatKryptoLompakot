@@ -93,11 +93,34 @@ class BitcoinConnector:
                         amount_btc = Decimal(abs(net_sat)) / Decimal(10**8)
                         kind = "deposit" if net_sat >= 0 else "withdrawal"
 
+                        from_addr = None
+                        to_addr = None
+                        if kind == "deposit":
+                            to_addr = clean_addr
+                            # Etsitään ensimmäinen ulkopuolinen lähettäjä
+                            for vin in item.get("vin", []):
+                                p_addr = vin.get("prevout", {}).get("scriptpubkey_address")
+                                if p_addr and p_addr != clean_addr:
+                                    from_addr = p_addr
+                                    break
+                            if not from_addr and item.get("vin"):
+                                from_addr = item["vin"][0].get("prevout", {}).get("scriptpubkey_address")
+                        else:
+                            from_addr = clean_addr
+                            # Etsitään ensimmäinen ulkopuolinen vastaanottaja
+                            for vout in item.get("vout", []):
+                                r_addr = vout.get("scriptpubkey_address")
+                                if r_addr and r_addr != clean_addr:
+                                    to_addr = r_addr
+                                    break
+
                         txs.append({
                             "hash": txid,
                             "log_index": 0,
                             "timestamp": iso_time,
                             "kind": kind,
+                            "from_address": from_addr,
+                            "to_address": to_addr,
                             "amount": f"{amount_btc:f}",
                             "fee": fee_btc,
                             "raw_json": json.dumps(item)
@@ -197,17 +220,20 @@ class BitcoinConnector:
                 """
                 INSERT INTO transactions (
                     id, account_id, chain, hash, log_index, timestamp,
-                    kind, asset_id, amount, fee, is_spam, raw_json
+                    kind, from_address, to_address, asset_id, amount, fee, is_spam, raw_json
                 )
-                VALUES (?, ?, 'bitcoin', ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                VALUES (?, ?, 'bitcoin', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
                 ON CONFLICT(account_id, chain, hash, log_index) DO UPDATE SET
                     timestamp = excluded.timestamp,
+                    from_address = excluded.from_address,
+                    to_address = excluded.to_address,
                     amount = excluded.amount,
                     raw_json = excluded.raw_json;
                 """,
                 (
                     tx_id, account_id, tx["hash"], tx["log_index"], tx["timestamp"],
-                    tx["kind"], asset_id, tx["amount"], tx["fee"], tx["raw_json"]
+                    tx["kind"], tx.get("from_address"), tx.get("to_address"),
+                    asset_id, tx["amount"], tx["fee"], tx["raw_json"]
                 )
             )
             saved_count += 1

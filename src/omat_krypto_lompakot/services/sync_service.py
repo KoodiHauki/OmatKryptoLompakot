@@ -7,6 +7,8 @@ import uuid
 
 from ..connectors.cex.kraken import KrakenConnector
 from ..connectors.cex.binance import BinanceConnector
+from ..connectors.cex.coinbase import CoinbaseConnector
+from ..connectors.cex.mexc import MexcConnector
 from ..connectors.onchain.evm import EvmConnector, SUPPORTED_EVM_CHAINS
 from ..connectors.onchain.bitcoin import BitcoinConnector
 from ..connectors.onchain.solana import SolanaConnector
@@ -76,6 +78,18 @@ class SyncService:
             elif venue == "binance":
                 api_key, api_sec, _ = creds
                 connector = BinanceConnector(api_key, api_sec)
+                success, perm_res = connector.sync_to_database(account_id, self.db)
+                if not success:
+                    error_msg = perm_res.error_message
+            elif venue == "coinbase":
+                api_key, api_sec, _ = creds
+                connector = CoinbaseConnector(api_key, api_sec)
+                success, perm_res = connector.sync_to_database(account_id, self.db)
+                if not success:
+                    error_msg = perm_res.error_message
+            elif venue in ("mexc", "mexec"):
+                api_key, api_sec, _ = creds
+                connector = MexcConnector(api_key, api_sec)
                 success, perm_res = connector.sync_to_database(account_id, self.db)
                 if not success:
                     error_msg = perm_res.error_message
@@ -172,6 +186,12 @@ class SyncService:
                     total_synced = connector.sync_transactions_to_database(account_id, self.db, limit=limit)
                 elif venue == "binance":
                     connector = BinanceConnector(api_key, api_sec)
+                    total_synced = connector.sync_transactions_to_database(account_id, self.db, limit=limit)
+                elif venue == "coinbase":
+                    connector = CoinbaseConnector(api_key, api_sec)
+                    total_synced = connector.sync_transactions_to_database(account_id, self.db, limit=limit)
+                elif venue in ("mexc", "mexec"):
+                    connector = MexcConnector(api_key, api_sec)
                     total_synced = connector.sync_transactions_to_database(account_id, self.db, limit=limit)
 
             elif account["type"] == "onchain":

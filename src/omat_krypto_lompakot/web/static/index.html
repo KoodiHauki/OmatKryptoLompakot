@@ -174,10 +174,13 @@
               <option value="arbitrum">Arbitrum</option>
               <option value="polygon">Polygon</option>
               <option value="optimism">Optimism</option>
+              <option value="robinhood">Robinhood Chain (L2)</option>
               <option value="solana">Solana</option>
               <option value="bitcoin">Bitcoin</option>
               <option value="kraken">Kraken (CEX)</option>
               <option value="binance">Binance (CEX)</option>
+              <option value="coinbase">Coinbase (CEX)</option>
+              <option value="mexc">MEXC Global (CEX)</option>
             </select>
           </div>
           <div>
@@ -268,7 +271,7 @@
 
       <!-- Type Switcher -->
       <div class="grid grid-cols-2 gap-2 bg-gray-900/60 p-1 rounded-xl text-xs font-semibold">
-        <button id="modal-tab-cex-btn" class="py-2 rounded-lg bg-indigo-600 text-white transition">CEX (Kraken / Binance)</button>
+        <button id="modal-tab-cex-btn" class="py-2 rounded-lg bg-indigo-600 text-white transition">CEX (Kraken / Binance / Coinbase / MEXC)</button>
         <button id="modal-tab-onchain-btn" class="py-2 rounded-lg text-gray-400 hover:text-white transition">On-Chain (EVM / BTC / SOL)</button>
       </div>
 
@@ -279,6 +282,8 @@
           <select id="cex-venue" class="w-full px-3 py-2 text-xs rounded-lg bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-indigo-500">
             <option value="kraken">Kraken</option>
             <option value="binance">Binance</option>
+            <option value="coinbase">Coinbase</option>
+            <option value="mexc">MEXC Global</option>
           </select>
         </div>
         <div>
@@ -312,10 +317,11 @@
           <label class="block text-xs font-medium text-gray-300 mb-1">Lohkoketju</label>
           <select id="onchain-chain" class="w-full px-3 py-2 text-xs rounded-lg bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-indigo-500">
             <option value="ethereum">Ethereum (ja ERC-20)</option>
-            <option value="polygon">Polygon (POL ja tokenit)</option>
-            <option value="arbitrum">Arbitrum One</option>
             <option value="base">Base</option>
+            <option value="arbitrum">Arbitrum One</option>
+            <option value="polygon">Polygon (POL ja tokenit)</option>
             <option value="optimism">Optimism</option>
+            <option value="robinhood">Robinhood Chain (Arbitrum Orbit L2)</option>
             <option value="bitcoin">Bitcoin (Mempool.space)</option>
             <option value="solana">Solana (SOL ja SPL-tokenit)</option>
           </select>

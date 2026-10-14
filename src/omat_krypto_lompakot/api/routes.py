@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field
 
 from ..connectors.cex.kraken import KrakenConnector
 from ..connectors.cex.binance import BinanceConnector
+from ..connectors.cex.coinbase import CoinbaseConnector
+from ..connectors.cex.mexc import MexcConnector
 from ..connectors.onchain.evm import EvmConnector, SUPPORTED_EVM_CHAINS
 from ..connectors.onchain.bitcoin import BitcoinConnector
 from ..connectors.onchain.solana import SolanaConnector
@@ -22,7 +24,7 @@ from ..services.sync_service import SyncService
 router = APIRouter(prefix="/api")
 
 ALL_SUPPORTED_CHAINS = sorted(list(SUPPORTED_EVM_CHAINS.keys())) + ["bitcoin", "solana"]
-ALL_SUPPORTED_CEXES = ["kraken", "binance"]
+ALL_SUPPORTED_CEXES = ["kraken", "binance", "coinbase", "mexc", "mexec"]
 
 
 class CreateCexAccountRequest(BaseModel):
@@ -129,6 +131,10 @@ def add_cex_account(req: CreateCexAccountRequest):
         connector = KrakenConnector(req.api_key, req.api_secret)
     elif venue == "binance":
         connector = BinanceConnector(req.api_key, req.api_secret)
+    elif venue == "coinbase":
+        connector = CoinbaseConnector(req.api_key, req.api_secret)
+    elif venue in ("mexc", "mexec"):
+        connector = MexcConnector(req.api_key, req.api_secret)
     else:
         raise HTTPException(status_code=400, detail="Tuntematon pörssi")
 
@@ -266,6 +272,10 @@ def test_account_connection(account_id: str):
             connector = KrakenConnector(api_key, api_sec)
         elif venue == "binance":
             connector = BinanceConnector(api_key, api_sec)
+        elif venue == "coinbase":
+            connector = CoinbaseConnector(api_key, api_sec)
+        elif venue in ("mexc", "mexec"):
+            connector = MexcConnector(api_key, api_sec)
         else:
             raise HTTPException(status_code=400, detail="Tuntematon pörssi")
 

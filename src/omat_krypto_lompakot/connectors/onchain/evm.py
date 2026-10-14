@@ -85,6 +85,18 @@ SUPPORTED_EVM_CHAINS: Dict[str, Dict[str, Any]] = {
         ],
         "default_blockscout": "https://optimism.blockscout.com/api/v2",
     },
+    "robinhood": {
+        "name": "Robinhood Chain",
+        "symbol": "ETH",
+        "decimals": 18,
+        "coingecko_id": "ethereum",
+        "display_group": "ETH",
+        "default_rpc": "https://rpc.mainnet.chain.robinhood.com",
+        "rpc_pool": [
+            "https://rpc.mainnet.chain.robinhood.com"
+        ],
+        "default_blockscout": "https://robinhoodchain.blockscout.com/api/v2",
+    },
 }
 
 DEFAULT_HTTP_HEADERS = {

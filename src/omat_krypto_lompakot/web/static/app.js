@@ -640,6 +640,33 @@ function renderTransactions(txs, total, summary = {}) {
       fifoCol = '<span class="text-gray-500 text-xs">-</span>';
     }
 
+    let hashCell = '';
+    if (tx.hash) {
+      const cleanHash = tx.hash.trim();
+      let explorerUrl = null;
+      if (!cleanHash.startsWith('tx_') && !cleanHash.startsWith('trade_')) {
+        if (tx.chain === 'ethereum') explorerUrl = `https://etherscan.io/tx/${cleanHash}`;
+        else if (tx.chain === 'optimism') explorerUrl = `https://optimism.blockscout.com/tx/${cleanHash}`;
+        else if (tx.chain === 'arbitrum') explorerUrl = `https://arbiscan.io/tx/${cleanHash}`;
+        else if (tx.chain === 'base') explorerUrl = `https://basescan.org/tx/${cleanHash}`;
+        else if (tx.chain === 'polygon') explorerUrl = `https://polygonscan.com/tx/${cleanHash}`;
+        else if (tx.chain === 'bsc') explorerUrl = `https://bscscan.com/tx/${cleanHash}`;
+        else if (tx.chain === 'solana') explorerUrl = `https://solscan.io/tx/${cleanHash}`;
+        else if (tx.chain === 'bitcoin') explorerUrl = `https://mempool.space/tx/${cleanHash}`;
+      }
+      if (explorerUrl) {
+        hashCell = `<a href="${explorerUrl}" target="_blank" rel="noopener noreferrer" class="font-mono text-indigo-400 hover:text-indigo-300 hover:underline" title="Avaa lohkoselaimessa: ${cleanHash}">${shortHash} ↗</a>`;
+      } else {
+        hashCell = `<span class="font-mono text-indigo-400" title="Tunniste: ${cleanHash}">${shortHash}</span>`;
+      }
+    } else {
+      hashCell = '<span class="text-gray-500 font-mono">-</span>';
+    }
+
+    if (tx.is_spam) {
+      hashCell += `<div class="mt-0.5"><span class="px-1.5 py-0.5 text-[9px] font-semibold rounded bg-rose-500/20 text-rose-300 border border-rose-500/30" title="${tx.spam_reason || 'Roskatransaktio'}">Roska</span></div>`;
+    }
+
     return `
       <tr class="hover:bg-gray-800/30 transition text-xs">
         <td class="px-4 py-3.5 font-mono text-gray-300">${timeStr}</td>
@@ -650,7 +677,7 @@ function renderTransactions(txs, total, summary = {}) {
         <td class="px-4 py-3.5">${toCol}</td>
         <td class="px-4 py-3.5">${valCol}</td>
         <td class="px-5 py-3.5">${fifoCol}</td>
-        <td class="px-4 py-3.5 font-mono text-indigo-400" title="${tx.hash}">${shortHash}</td>
+        <td class="px-4 py-3.5">${hashCell}</td>
       </tr>
     `;
   }).join('');

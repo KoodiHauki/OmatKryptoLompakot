@@ -85,6 +85,20 @@ SUPPORTED_EVM_CHAINS: Dict[str, Dict[str, Any]] = {
         ],
         "default_blockscout": "https://optimism.blockscout.com/api/v2",
     },
+    "op": {
+        "name": "Optimism",
+        "symbol": "ETH",
+        "decimals": 18,
+        "coingecko_id": "ethereum",
+        "display_group": "ETH",
+        "default_rpc": "https://mainnet.optimism.io",
+        "rpc_pool": [
+            "https://mainnet.optimism.io",
+            "https://optimism-rpc.publicnode.com",
+            "https://1rpc.io/op"
+        ],
+        "default_blockscout": "https://optimism.blockscout.com/api/v2",
+    },
     "robinhood": {
         "name": "Robinhood Chain",
         "symbol": "ETH",
@@ -377,6 +391,22 @@ KNOWN_EVM_TOKENS: Dict[str, List[Dict[str, Any]]] = {
             "coingecko_id": "usd-coin",
         },
         {
+            "symbol": "USDC.e",
+            "name": "Bridged USDC",
+            "contract_address": "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
+            "decimals": 6,
+            "display_group": "USDC",
+            "coingecko_id": "usd-coin",
+        },
+        {
+            "symbol": "USDT",
+            "name": "Tether USD",
+            "contract_address": "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58",
+            "decimals": 6,
+            "display_group": "USDT",
+            "coingecko_id": "tether",
+        },
+        {
             "symbol": "OP",
             "name": "Optimism",
             "contract_address": "0x4200000000000000000000000000000000000042",
@@ -391,6 +421,22 @@ KNOWN_EVM_TOKENS: Dict[str, List[Dict[str, Any]]] = {
             "decimals": 18,
             "display_group": "VELO",
             "coingecko_id": "velodrome-finance",
+        },
+        {
+            "symbol": "WBTC",
+            "name": "Wrapped BTC",
+            "contract_address": "0x68f180fcCe6836688e9084f035309E29Bf0A2095",
+            "decimals": 8,
+            "display_group": "WBTC",
+            "coingecko_id": "wrapped-bitcoin",
+        },
+        {
+            "symbol": "DAI",
+            "name": "Dai Stablecoin",
+            "contract_address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+            "decimals": 18,
+            "display_group": "DAI",
+            "coingecko_id": "dai",
         },
     ],
     "bsc": [
@@ -433,6 +479,7 @@ KNOWN_EVM_TOKENS: Dict[str, List[Dict[str, Any]]] = {
     "hyperevm": [],
 }
 KNOWN_EVM_TOKENS["binance_smart_chain"] = KNOWN_EVM_TOKENS["bsc"]
+KNOWN_EVM_TOKENS["op"] = KNOWN_EVM_TOKENS["optimism"]
 
 
 class EvmConnector:
@@ -498,6 +545,20 @@ class EvmConnector:
                         items = data.get("items", [])
                         for item in items:
                             token_info = item.get("token", {})
+                            token_type = token_info.get("type", "ERC-20")
+                            if token_type not in ("ERC-20", None):
+                                continue
+
+                            contract_addr = token_info.get("address_hash") or token_info.get("address", "")
+                            if not contract_addr:
+                                continue
+
+                            symbol = token_info.get("symbol")
+                            if not symbol or not isinstance(symbol, str) or len(symbol) > 20:
+                                continue
+                            if any(spam in symbol.lower() for spam in ("voucher", "http", ".com", ".lol", ".io")):
+                                continue
+
                             raw_value = item.get("value", "0")
                             decimals_str = token_info.get("decimals", "18") or "18"
                             try:
@@ -505,9 +566,6 @@ class EvmConnector:
                             except (ValueError, TypeError):
                                 decimals = 18
 
-                            symbol = token_info.get("symbol", "UNKNOWN")
-                            contract_addr = token_info.get("address", "")
-                            
                             try:
                                 raw_val_dec = Decimal(str(raw_value))
                                 if raw_val_dec > 0:

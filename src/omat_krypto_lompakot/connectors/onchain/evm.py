@@ -230,6 +230,14 @@ KNOWN_EVM_TOKENS: Dict[str, List[Dict[str, Any]]] = {
             "display_group": "DAI",
             "coingecko_id": "dai",
         },
+        {
+            "symbol": "LINK",
+            "name": "Chainlink",
+            "contract_address": "0x88Fb150BDc53A65fe94Dea0c9BA0a6dAf8C6e196",
+            "decimals": 18,
+            "display_group": "LINK",
+            "coingecko_id": "chainlink",
+        },
     ],
     "arbitrum": [
         {
@@ -280,6 +288,22 @@ KNOWN_EVM_TOKENS: Dict[str, List[Dict[str, Any]]] = {
             "display_group": "WBTC",
             "coingecko_id": "wrapped-bitcoin",
         },
+        {
+            "symbol": "USDG",
+            "name": "Global Dollar",
+            "contract_address": "0x004B506865409877C9fA29bfb1ebA929984B9bbC",
+            "decimals": 6,
+            "display_group": "USDG",
+            "coingecko_id": "global-dollar",
+        },
+        {
+            "symbol": "LINK",
+            "name": "Chainlink",
+            "contract_address": "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4",
+            "decimals": 18,
+            "display_group": "LINK",
+            "coingecko_id": "chainlink",
+        },
     ],
     "ethereum": [
         {
@@ -321,6 +345,22 @@ KNOWN_EVM_TOKENS: Dict[str, List[Dict[str, Any]]] = {
             "decimals": 18,
             "display_group": "DAI",
             "coingecko_id": "dai",
+        },
+        {
+            "symbol": "USDG",
+            "name": "Global Dollar",
+            "contract_address": "0xe343167631d89B6Ffc58B88d6b7fB0228795491D",
+            "decimals": 6,
+            "display_group": "USDG",
+            "coingecko_id": "global-dollar",
+        },
+        {
+            "symbol": "LINK",
+            "name": "Chainlink",
+            "contract_address": "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+            "decimals": 18,
+            "display_group": "LINK",
+            "coingecko_id": "chainlink",
         },
     ],
     "polygon": [
@@ -371,6 +411,14 @@ KNOWN_EVM_TOKENS: Dict[str, List[Dict[str, Any]]] = {
             "decimals": 8,
             "display_group": "WBTC",
             "coingecko_id": "wrapped-bitcoin",
+        },
+        {
+            "symbol": "LINK",
+            "name": "Chainlink",
+            "contract_address": "0xb0897686c545045afc77cf20ec7a532e3120e0f1",
+            "decimals": 18,
+            "display_group": "LINK",
+            "coingecko_id": "chainlink",
         },
     ],
     "optimism": [
@@ -438,6 +486,14 @@ KNOWN_EVM_TOKENS: Dict[str, List[Dict[str, Any]]] = {
             "display_group": "DAI",
             "coingecko_id": "dai",
         },
+        {
+            "symbol": "LINK",
+            "name": "Chainlink",
+            "contract_address": "0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6",
+            "decimals": 18,
+            "display_group": "LINK",
+            "coingecko_id": "chainlink",
+        },
     ],
     "bsc": [
         {
@@ -471,6 +527,14 @@ KNOWN_EVM_TOKENS: Dict[str, List[Dict[str, Any]]] = {
             "decimals": 18,
             "display_group": "USDC",
             "coingecko_id": "usd-coin",
+        },
+        {
+            "symbol": "LINK",
+            "name": "Chainlink",
+            "contract_address": "0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD",
+            "decimals": 18,
+            "display_group": "LINK",
+            "coingecko_id": "chainlink",
         },
     ],
     "binance_smart_chain": [],

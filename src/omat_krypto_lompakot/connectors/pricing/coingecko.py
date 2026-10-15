@@ -29,6 +29,8 @@ DEFAULT_COINGECKO_MAP = {
     "POL": "polygon-ecosystem-token",
     "ARB": "arbitrum",
     "OP": "optimism",
+    "USDG": "global-dollar",
+    "LINK": "chainlink",
 }
 
 

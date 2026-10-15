@@ -22,6 +22,8 @@ KNOWN_SPL_MINTS: Dict[str, Dict[str, str]] = {
     "mSoLzYCIlBmHd67rhqqS5EZygvtYQtB58b9rCgnNw7g": {"symbol": "MSOL", "name": "Marinade staked SOL", "display_group": "SOL"},
     "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn": {"symbol": "JitoSOL", "name": "Jito Staked SOL", "display_group": "SOL"},
     "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263": {"symbol": "BONK", "name": "Bonk", "display_group": "BONK"},
+    "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH": {"symbol": "USDG", "name": "Global Dollar", "display_group": "USDG"},
+    "LinkhB3afbBKb2EQQu7s7umdZceV3wcvAUJhQAfQ23L": {"symbol": "LINK", "name": "Chainlink", "display_group": "LINK"},
 }
 
 

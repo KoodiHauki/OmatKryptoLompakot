@@ -21,6 +21,24 @@ def test_known_evm_tokens_definitions():
     assert weth_token["display_group"] == "WETH"
     assert weth_token["decimals"] == 18
 
+    # Chainlink ja Global Dollar
+    assert "LINK" in base_symbols
+    assert "USDG" in [t["symbol"] for t in KNOWN_EVM_TOKENS["ethereum"]]
+    assert "LINK" in [t["symbol"] for t in KNOWN_EVM_TOKENS["ethereum"]]
+    assert "USDG" in [t["symbol"] for t in KNOWN_EVM_TOKENS["arbitrum"]]
+    assert "LINK" in [t["symbol"] for t in KNOWN_EVM_TOKENS["arbitrum"]]
+    assert "LINK" in [t["symbol"] for t in KNOWN_EVM_TOKENS["optimism"]]
+    assert "LINK" in [t["symbol"] for t in KNOWN_EVM_TOKENS["polygon"]]
+    assert "LINK" in [t["symbol"] for t in KNOWN_EVM_TOKENS["bsc"]]
+
+    from omat_krypto_lompakot.connectors.pricing.coingecko import DEFAULT_COINGECKO_MAP
+    assert DEFAULT_COINGECKO_MAP.get("USDG") == "global-dollar"
+    assert DEFAULT_COINGECKO_MAP.get("LINK") == "chainlink"
+
+    from omat_krypto_lompakot.connectors.onchain.solana import KNOWN_SPL_MINTS
+    assert "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH" in KNOWN_SPL_MINTS
+    assert "LinkhB3afbBKb2EQQu7s7umdZceV3wcvAUJhQAfQ23L" in KNOWN_SPL_MINTS
+
     # Binance pricing aliases
     assert SYMBOL_ALIASES.get("WETH") == "ETH"
     assert SYMBOL_ALIASES.get("CBBTC") == "BTC"

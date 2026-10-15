@@ -21,6 +21,7 @@ SYMBOL_ALIASES = {
     "XXBT": "BTC",
     "XETH": "ETH",
     "WETH": "ETH",
+    "CBBTC": "BTC",
     "WMATIC": "POL",
     "WPOL": "POL",
     "MATIC": "POL",

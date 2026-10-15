@@ -163,14 +163,15 @@ class BinanceConnector:
             balances = self.fetch_balances()
             for (symbol, kind), amount_str in balances.items():
                 asset_id = f"binance:{symbol}"
-                display_group = "ETH" if symbol.upper() == "WETH" else symbol.upper()
+                display_group = symbol.upper()
 
                 db.execute(
                     """
                     INSERT INTO assets (id, chain, symbol, display_group)
                     VALUES (?, 'binance', ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
-                        symbol = excluded.symbol;
+                        symbol = excluded.symbol,
+                        display_group = excluded.display_group;
                     """,
                     (asset_id, symbol, display_group)
                 )

@@ -27,6 +27,7 @@ SYMBOL_ALIASES = {
     "MATIC": "POL",
     "ZEUR": "EUR",
     "ZUSD": "USD",
+    "VELO": "VELODROME",
 }
 
 

@@ -125,6 +125,30 @@ SUPPORTED_EVM_CHAINS: Dict[str, Dict[str, Any]] = {
         ],
         "default_blockscout": None,
     },
+    "hyperliquid": {
+        "name": "Hyperliquid",
+        "symbol": "HYPE",
+        "decimals": 18,
+        "coingecko_id": "hyperliquid",
+        "display_group": "HYPE",
+        "default_rpc": "https://rpc.hyperliquid.xyz/evm",
+        "rpc_pool": [
+            "https://rpc.hyperliquid.xyz/evm"
+        ],
+        "default_blockscout": None,
+    },
+    "hyperevm": {
+        "name": "Hyperliquid",
+        "symbol": "HYPE",
+        "decimals": 18,
+        "coingecko_id": "hyperliquid",
+        "display_group": "HYPE",
+        "default_rpc": "https://rpc.hyperliquid.xyz/evm",
+        "rpc_pool": [
+            "https://rpc.hyperliquid.xyz/evm"
+        ],
+        "default_blockscout": None,
+    },
 }
 
 DEFAULT_HTTP_HEADERS = {
@@ -360,6 +384,14 @@ KNOWN_EVM_TOKENS: Dict[str, List[Dict[str, Any]]] = {
             "display_group": "OP",
             "coingecko_id": "optimism",
         },
+        {
+            "symbol": "VELO",
+            "name": "Velodrome Finance",
+            "contract_address": "0x9560e827aF36c94D2Ac33a39bCE1Fe78631088Db",
+            "decimals": 18,
+            "display_group": "VELO",
+            "coingecko_id": "velodrome-finance",
+        },
     ],
     "bsc": [
         {
@@ -397,6 +429,8 @@ KNOWN_EVM_TOKENS: Dict[str, List[Dict[str, Any]]] = {
     ],
     "binance_smart_chain": [],
     "robinhood": [],
+    "hyperliquid": [],
+    "hyperevm": [],
 }
 KNOWN_EVM_TOKENS["binance_smart_chain"] = KNOWN_EVM_TOKENS["bsc"]
 
@@ -535,7 +569,34 @@ class EvmConnector:
                         break
                     except Exception as err:
                         logger.debug(f"RPC balanceOf virhe {kt['symbol']} ({self.chain}): {err}")
-                        continue
+        # 3. Jos ketju on Hyperliquid, haetaan lisäksi spot-saldot suoraan Hyperliquid Info API:sta
+        if self.chain in ("hyperliquid", "hyperevm"):
+            try:
+                with httpx.Client(timeout=8.0) as client:
+                    resp = client.post(
+                        "https://api.hyperliquid.xyz/info",
+                        json={"type": "spotClearinghouseState", "user": checksum_addr}
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        for b in data.get("balances", []):
+                            coin = b.get("coin")
+                            tot = b.get("total", "0")
+                            try:
+                                tot_dec = Decimal(tot)
+                                if tot_dec > 0 and coin and coin != "HYPE":
+                                    tokens_by_contract[coin.lower()] = {
+                                        "contract_address": coin.lower(),
+                                        "symbol": coin,
+                                        "name": coin,
+                                        "decimals": 18,
+                                        "amount": f"{tot_dec:f}",
+                                        "display_group": coin.upper(),
+                                    }
+                            except Exception:
+                                pass
+            except Exception as e:
+                logger.warning(f"Hyperliquid API info -haku epäonnistui osoitteelle {address}: {e}")
 
         return list(tokens_by_contract.values())
 
@@ -626,17 +687,26 @@ class EvmConnector:
             symbol = tok["symbol"]
             asset_id = f"{self.chain}:{contract_addr}"
             
-            # Ryhmittely: WETH -> WETH, WPOL/WMATIC -> POL
+            # Ryhmittely: WETH -> WETH, VELO -> VELO, HYPE -> HYPE, WPOL/WMATIC -> POL
             if tok.get("display_group"):
                 display_group = tok["display_group"]
             elif symbol.upper() == "WETH":
                 display_group = "WETH"
+            elif symbol.upper() == "VELO":
+                display_group = "VELO"
+            elif symbol.upper() == "HYPE":
+                display_group = "HYPE"
             elif symbol.upper() in ("WPOL", "WMATIC"):
                 display_group = "POL"
             else:
                 display_group = symbol.upper()
 
             coingecko_id = tok.get("coingecko_id")
+            if not coingecko_id:
+                if symbol.upper() == "VELO":
+                    coingecko_id = "velodrome-finance"
+                elif symbol.upper() == "HYPE":
+                    coingecko_id = "hyperliquid"
 
             db.execute(
                 """

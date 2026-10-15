@@ -18,6 +18,8 @@ DEFAULT_COINGECKO_MAP = {
     "CBBTC": "coinbase-wrapped-btc",
     "AERO": "aerodrome-finance",
     "VIRTUAL": "virtual-protocol",
+    "HYPE": "hyperliquid",
+    "VELO": "velodrome-finance",
     "USDC": "usd-coin",
     "USDT": "tether",
     "USD": "usd",

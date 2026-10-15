@@ -469,10 +469,15 @@ def list_transactions(
     total_row = db.fetch_one(count_query, tuple(params))
     total_count = total_row["total"] if total_row else 0
 
+    from ..services.fifo_service import FifoAccountingService
+    fifo_service = FifoAccountingService(db)
+    fifo_map, fifo_summary = fifo_service.calculate_all_fifo()
+
     results = []
     for tx in raw_txs:
         t_dict = dict(tx)
         t_dict["historical_value"] = _extract_historical_value(t_dict)
+        t_dict = fifo_service.enrich_transaction(t_dict, fifo_map)
         t_dict.pop("raw_json", None)
         results.append(t_dict)
 
@@ -480,6 +485,7 @@ def list_transactions(
         "total": total_count,
         "limit": limit,
         "offset": offset,
+        "summary": fifo_summary,
         "transactions": results
     }
 

@@ -496,20 +496,38 @@ async function loadTransactions() {
     const res = await fetch(`/api/transactions?${params.toString()}`);
     if (!res.ok) throw new Error('Transaktioiden haku epäonnistui');
     const data = await res.json();
-    renderTransactions(data.transactions || [], data.total || 0);
+    renderTransactions(data.transactions || [], data.total || 0, data.summary || {});
   } catch (err) {
     console.error('Virhe transaktioiden latauksessa:', err);
   }
 }
 
-function renderTransactions(txs, total) {
+function renderTransactions(txs, total, summary = {}) {
   const countBadge = document.getElementById('tx-count-badge');
   if (countBadge) countBadge.textContent = `${total} tapahtumaa`;
+
+  // Päivitetään FIFO-yhteenvetokortit
+  const elGain = document.getElementById('fifo-total-gain');
+  const elLoss = document.getElementById('fifo-total-loss');
+  const elNet = document.getElementById('fifo-net-gain');
+  const elTrades = document.getElementById('fifo-trade-count');
+  if (elGain) elGain.textContent = summary.total_gain_eur_display || '0,00 €';
+  if (elLoss) elLoss.textContent = summary.total_loss_eur_display || '0,00 €';
+  if (elNet) {
+    elNet.textContent = summary.net_gain_loss_eur_display || '0,00 €';
+    if ((summary.net_gain_loss_eur || 0) >= 0) {
+      elNet.className = 'text-base font-bold text-emerald-400 font-mono mt-1';
+    } else {
+      elNet.className = 'text-base font-bold text-rose-400 font-mono mt-1';
+    }
+  }
+  if (elTrades) elTrades.textContent = `${summary.total_trades || 0} kpl (${summary.sell_trades_with_gain_loss || 0} myyntiä)`;
+
   const tbody = document.getElementById('transactions-tbody');
   if (!tbody) return;
 
   if (!txs || txs.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="px-6 py-8 text-center text-gray-500">Ei löytyneitä transaktioita annetuilla suodattimilla.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="px-6 py-8 text-center text-gray-500">Ei löytyneitä transaktioita annetuilla suodattimilla.</td></tr>`;
     return;
   }
 
@@ -532,24 +550,107 @@ function renderTransactions(txs, total) {
     const shortHash = tx.hash && tx.hash.length > 16 ? `${tx.hash.slice(0, 8)}...${tx.hash.slice(-6)}` : (tx.hash || '-');
     const tokenSymbol = tx.asset_symbol || (tx.chain === 'ethereum' ? 'ETH' : (tx.chain === 'solana' ? 'SOL' : (tx.chain === 'bitcoin' ? 'BTC' : '')));
     const amountStr = tx.amount ? `${tx.amount} ${tokenSymbol}`.trim() : '-';
-    const histVal = tx.historical_value ? `<span class="font-semibold text-emerald-400">${tx.historical_value}</span>` : '<span class="text-gray-500">-</span>';
     const chainBadge = `<span class="px-2 py-0.5 text-[10px] uppercase font-mono rounded bg-gray-800 text-gray-300 border border-gray-700/60">${tx.chain}</span>`;
 
-    let statusBadge = '<span class="text-xs text-gray-400">Vahvistettu</span>';
-    if (tx.is_spam) {
-      statusBadge = `<span class="px-2 py-0.5 text-[10px] font-semibold rounded bg-rose-500/20 text-rose-300 border border-rose-500/30" title="${tx.spam_reason || 'Roskatransaktio'}">Roska</span>`;
+    // Sarakkeet: Vaihto (Mistä & Hankintahinta), Mihin vaihdettiin, Toteuma-arvo, Voitto/Tappio FIFO
+    let fromCol = '';
+    let toCol = '';
+    let valCol = '';
+    let fifoCol = '';
+
+    const fifo = tx.trade_fifo;
+    if (fifo) {
+      if (fifo.trade_type === 'sell') {
+        fromCol = `
+          <div>
+            <div class="font-bold text-gray-200">${fifo.from_display}</div>
+            <div class="text-[11px] text-gray-400 mt-0.5">Hankinta: <span class="text-gray-300 font-mono">${fifo.acquisition_cost_display}</span></div>
+            <div class="text-[10px] text-gray-500 font-mono">(${fifo.acquisition_unit_cost_display})</div>
+          </div>
+        `;
+        toCol = `
+          <div>
+            <span class="font-bold text-emerald-400">&rarr; ${fifo.to_display}</span>
+          </div>
+        `;
+        valCol = `
+          <div>
+            <div class="font-semibold text-gray-200 font-mono">${fifo.trade_value_display}</div>
+            ${fifo.fee_display ? `<div class="text-[10px] text-gray-500 font-mono">Kulu: ${fifo.fee_display}</div>` : ''}
+          </div>
+        `;
+
+        if (fifo.gain_loss_status === 'profit') {
+          fifoCol = `
+            <div>
+              <span class="inline-flex items-center px-2 py-0.5 text-xs font-bold rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                ${fifo.gain_loss_display} (${fifo.gain_loss_pct_display})
+              </span>
+              ${!fifo.is_fully_backed ? '<div class="text-[10px] text-amber-400/90 mt-0.5" title="Aiempia ostoja ei löytynyt lompakosta, käytetty 20% hankintameno-olettamaa">HMO 20% sovellettu</div>' : ''}
+            </div>
+          `;
+        } else if (fifo.gain_loss_status === 'loss') {
+          fifoCol = `
+            <div>
+              <span class="inline-flex items-center px-2 py-0.5 text-xs font-bold rounded bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                ${fifo.gain_loss_display} (${fifo.gain_loss_pct_display})
+              </span>
+              ${!fifo.is_fully_backed ? '<div class="text-[10px] text-amber-400/90 mt-0.5" title="Aiempia ostoja ei löytynyt lompakosta, käytetty 20% hankintameno-olettamaa">HMO 20% sovellettu</div>' : ''}
+            </div>
+          `;
+        } else {
+          fifoCol = `
+            <span class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded bg-gray-700/40 text-gray-300">
+              0,00 ${fifo.currency} (0.0 %)
+            </span>
+          `;
+        }
+
+      } else {
+        // Buy / Swap in
+        fromCol = `
+          <div>
+            <div class="font-bold text-gray-300">${fifo.from_display}</div>
+            <div class="text-[10px] text-gray-500 mt-0.5">(Maksettu vastine)</div>
+          </div>
+        `;
+        toCol = `
+          <div>
+            <div class="font-bold text-indigo-400">&rarr; ${fifo.to_display}</div>
+            <div class="text-[11px] text-gray-400 mt-0.5">Ostokurssi: <span class="font-mono text-gray-300">${fifo.acquisition_unit_cost_display}</span></div>
+          </div>
+        `;
+        valCol = `
+          <div>
+            <div class="font-semibold text-gray-200 font-mono">${fifo.trade_value_display}</div>
+            ${fifo.fee_display ? `<div class="text-[10px] text-gray-500 font-mono">Kulu: ${fifo.fee_display}</div>` : ''}
+          </div>
+        `;
+        fifoCol = `
+          <span class="inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20" title="Hankintaerä lisätty lompakon FIFO-rekisteriin">
+            Hankintaerä kirjattu
+          </span>
+        `;
+      }
+    } else {
+      // Tavalliset siirrot, talletukset, nostot
+      fromCol = `<span class="font-mono font-medium text-gray-200">${amountStr}</span>`;
+      toCol = '<span class="text-gray-500 text-xs">-</span>';
+      valCol = tx.historical_value ? `<span class="font-semibold text-emerald-400 font-mono">${tx.historical_value}</span>` : '<span class="text-gray-500">-</span>';
+      fifoCol = '<span class="text-gray-500 text-xs">-</span>';
     }
 
     return `
       <tr class="hover:bg-gray-800/30 transition text-xs">
-        <td class="px-5 py-3.5 font-mono text-gray-300">${timeStr}</td>
-        <td class="px-5 py-3.5 font-medium text-white">${tx.account_name}</td>
-        <td class="px-5 py-3.5">${chainBadge}</td>
-        <td class="px-5 py-3.5">${kindBadge}</td>
-        <td class="px-5 py-3.5 font-mono font-medium text-gray-200">${amountStr}</td>
-        <td class="px-5 py-3.5 font-mono">${histVal}</td>
-        <td class="px-5 py-3.5 font-mono text-indigo-400" title="${tx.hash}">${shortHash}</td>
-        <td class="px-5 py-3.5">${statusBadge}</td>
+        <td class="px-4 py-3.5 font-mono text-gray-300">${timeStr}</td>
+        <td class="px-4 py-3.5 font-medium text-white">${tx.account_name}</td>
+        <td class="px-3 py-3.5">${chainBadge}</td>
+        <td class="px-3 py-3.5">${kindBadge}</td>
+        <td class="px-5 py-3.5">${fromCol}</td>
+        <td class="px-4 py-3.5">${toCol}</td>
+        <td class="px-4 py-3.5">${valCol}</td>
+        <td class="px-5 py-3.5">${fifoCol}</td>
+        <td class="px-4 py-3.5 font-mono text-indigo-400" title="${tx.hash}">${shortHash}</td>
       </tr>
     `;
   }).join('');

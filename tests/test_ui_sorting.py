@@ -23,8 +23,8 @@ async def test_portfolio_table_sorting_and_filtering():
         await page.goto("http://127.0.0.1:8000", wait_until="networkidle")
         
         # Wait for table rows to load
-        await page.wait_for_selector("#portfolio-groups-tbody tr td")
-        await page.wait_for_timeout(1000)
+        await page.wait_for_selector("#portfolio-groups-tbody tr td:nth-child(4)")
+        await page.wait_for_timeout(500)
 
         # 1. VERIFY DEFAULT SORTING (value_usd DESC)
         rows = await page.query_selector_all("#portfolio-groups-tbody tr")

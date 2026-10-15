@@ -267,29 +267,50 @@
         </div>
       </div>
 
+      <!-- FIFO Realized Gains Summary Cards -->
+      <div id="tx-fifo-summary" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="glass p-4 rounded-xl border border-gray-800/80">
+          <div class="text-[11px] font-medium text-gray-400">Toteutuneet voitot (FIFO)</div>
+          <div id="fifo-total-gain" class="text-base font-bold text-emerald-400 font-mono mt-1">0,00 €</div>
+        </div>
+        <div class="glass p-4 rounded-xl border border-gray-800/80">
+          <div class="text-[11px] font-medium text-gray-400">Toteutuneet tappiot (FIFO)</div>
+          <div id="fifo-total-loss" class="text-base font-bold text-rose-400 font-mono mt-1">0,00 €</div>
+        </div>
+        <div class="glass p-4 rounded-xl border border-gray-800/80">
+          <div class="text-[11px] font-medium text-gray-400">Nettotulos (Verotettava voitto/tappio)</div>
+          <div id="fifo-net-gain" class="text-base font-bold text-indigo-400 font-mono mt-1">0,00 €</div>
+        </div>
+        <div class="glass p-4 rounded-xl border border-gray-800/80">
+          <div class="text-[11px] font-medium text-gray-400">Analysoidut kaupat (Lompakkokohtainen)</div>
+          <div id="fifo-trade-count" class="text-base font-bold text-gray-200 font-mono mt-1">0 kpl</div>
+        </div>
+      </div>
+
       <!-- Transactions Table -->
       <div class="glass rounded-2xl overflow-hidden">
         <div class="px-6 py-4 border-b border-gray-800/80 flex items-center justify-between">
-          <h2 class="font-bold text-sm text-gray-200">Tapahtumahistoria</h2>
+          <h2 class="font-bold text-sm text-gray-200">Tapahtumahistoria &amp; Vaihdot (FIFO)</h2>
           <span id="tx-count-badge" class="text-xs text-gray-500">0 tapahtumaa</span>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left text-sm">
             <thead class="text-xs text-gray-400 uppercase bg-gray-900/50 border-b border-gray-800">
               <tr>
-                <th class="px-5 py-3.5">Aika (UTC)</th>
-                <th class="px-5 py-3.5">Lähde / Tili</th>
-                <th class="px-5 py-3.5">Ketju</th>
-                <th class="px-5 py-3.5">Laji</th>
-                <th class="px-5 py-3.5">Määrä & Token</th>
-                <th class="px-5 py-3.5">Arvo tapahtumahetkellä</th>
-                <th class="px-5 py-3.5">Tapahtumatunniste (Hash)</th>
-                <th class="px-5 py-3.5">Status</th>
+                <th class="px-4 py-3.5">Aika</th>
+                <th class="px-4 py-3.5">Lähde / Tili</th>
+                <th class="px-3 py-3.5">Ketju</th>
+                <th class="px-3 py-3.5">Laji</th>
+                <th class="px-5 py-3.5">Vaihto (Mistä &amp; Hankintahinta)</th>
+                <th class="px-4 py-3.5">Mihin vaihdettiin</th>
+                <th class="px-4 py-3.5">Arvo tapahtumahetkellä</th>
+                <th class="px-5 py-3.5">Voitto / Tappio (FIFO)</th>
+                <th class="px-4 py-3.5">Tapahtumatunniste (Hash)</th>
               </tr>
             </thead>
             <tbody id="transactions-tbody" class="divide-y divide-gray-800/60">
               <tr>
-                <td colspan="8" class="px-6 py-8 text-center text-gray-500">Ei vielä ladattuja transaktioita.</td>
+                <td colspan="9" class="px-6 py-8 text-center text-gray-500">Ei vielä ladattuja transaktioita.</td>
               </tr>
             </tbody>
           </table>

@@ -194,22 +194,68 @@ class FifoAccountingService:
                 to_symbol = quote
                 to_amount = cost
 
-        # 5. On-chain EVM / DEX (1inch, Uniswap jne.)
+        # 5. On-chain EVM / DEX (1inch, Uniswap, Aerodrome jne.)
         elif chain in ("ethereum", "arbitrum", "optimism", "base", "polygon", "bsc", "hyperliquid"):
             dec_in = raw.get("decoded_input", {})
             method = (raw.get("method") or "").lower()
-            rate = Decimal(str(raw.get("historic_exchange_rate", "0")))
-            base = normalize_symbol(tx.get("asset_symbol") or "ETH")
+            base = normalize_symbol(tx.get("asset_symbol") or raw.get("token", {}).get("symbol") or "ETH")
+            stables = ("USDC", "USDT", "DAI", "EUR", "USD", "USMS")
+            
+            vol = amount if amount > 0 else Decimal(str(raw.get("total", {}).get("value", 0)))
+            if vol == 0:
+                vol = Decimal("0.05")
+
             quote = "USD"
             currency = "USD"
-            trade_type = "sell"
-            
-            vol = amount if amount > 0 else Decimal("0.05")
-            trade_value = vol * rate if rate > 0 else Decimal("0")
-            from_symbol = base
-            from_amount = vol
-            to_symbol = "ETH" if base != "ETH" else "USD"
-            to_amount = trade_value if to_symbol == "USD" else vol
+
+            if base in stables:
+                trade_type = "buy"
+                from_symbol = base
+                from_amount = vol
+                to_symbol = "CRYPTO"
+                to_amount = vol
+                trade_value = vol
+                price = Decimal("1.0")
+            else:
+                trade_type = "sell"
+                from_symbol = base
+                from_amount = vol
+                to_symbol = "USD"
+                to_amount = vol
+                rate_val = raw.get("historic_exchange_rate")
+                try:
+                    rate = Decimal(str(rate_val)) if rate_val else Decimal("0")
+                except Exception:
+                    rate = Decimal("0")
+                trade_value = vol * rate if rate > 0 else vol
+                price = rate
+
+        # 6. Solana DEX (Jupiter, Raydium, Meteora jne.)
+        elif chain == "solana":
+            is_swap = raw.get("is_swap", False)
+            if not is_swap and kind != "trade":
+                return None
+            from_symbol = normalize_symbol(raw.get("from_symbol") or "SOL")
+            from_amount = Decimal(str(raw.get("from_amount", amount)))
+            to_symbol = normalize_symbol(raw.get("to_symbol") or "SOL")
+            to_amount = Decimal(str(raw.get("to_amount", amount)))
+
+            stables = ("USDC", "USDT", "USD", "NUSD", "EUR", "EURE")
+            if from_symbol in stables and to_symbol not in stables:
+                trade_type = "buy"
+                currency = from_symbol if from_symbol in ("EUR", "USD") else "USD"
+                trade_value = from_amount
+                price = (from_amount / to_amount) if to_amount > 0 else Decimal("0")
+            elif to_symbol in stables and from_symbol not in stables:
+                trade_type = "sell"
+                currency = to_symbol if to_symbol in ("EUR", "USD") else "USD"
+                trade_value = to_amount
+                price = (to_amount / from_amount) if from_amount > 0 else Decimal("0")
+            else:
+                trade_type = "sell"
+                currency = "USD"
+                trade_value = to_amount if to_amount > 0 else from_amount
+                price = (to_amount / from_amount) if from_amount > 0 else Decimal("0")
 
         else:
             return None

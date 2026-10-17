@@ -18,7 +18,8 @@ Taito käyttää FastMCP stdio-proxya:
 Käytettävissä olevat työkalut:
 - `get_total_portfolio()`: Palauttaa kootun kokonaisvarallisuuden (EUR ja USD) ryhmiteltynä omaisuuslajeittain sekä järjestelmävaroitukset.
 - `get_balances_by_source(source_type, source_name)`: Hakee tietyn pörssin tai lohkoketjuosoitteen saldot.
-- `get_transactions(chain, account_id, kind, include_spam, limit)`: Hakee transaktiot suodatettuna (oletuksena roskatransaktiot piilotettu).
+- `get_transactions(chain, account_id, kind, include_spam, limit, offset, date_from, date_to, search)`: Hakee transaktiot suodatettuna ja rikastettuna FIFO-voitoilla/tappioilla (oletuksena roskatransaktiot piilotettu).
+- `get_fifo_summary()`: Hakee verotuksen FIFO-yhteenvedon (voitot, tappiot, nettotulos EUR sekä luovutusten lukumäärä).
 - `check_connection_health()`: Tarkistaa CEX API -avainten vanhenemisen ja yhteysstatukset.
 - `trigger_sync(account_id, force)`: Käynnistää taustapäivityksen.
 
@@ -26,6 +27,7 @@ Käytettävissä olevat työkalut:
 Kun käyttäjä kysyy:
 - *"Paljonko minulla on kryptoja yhteensä?"* -> Kutsu `get_total_portfolio()`.
 - *"Onko minulla ETH:tä Krakenissa vai lompakossa?"* -> Kutsu `get_balances_by_source()`.
+- *"Paljonko minulla on verotettavia luovutusvoittoja tai -tappioita?"* -> Kutsu `get_fifo_summary()`.
 - *"Näytä viimeisimmät siirtoni"* -> Kutsu `get_transactions()`.
 - *"Ovatko API-avaimeni vanhenemassa?"* -> Kutsu `check_connection_health()`.
 

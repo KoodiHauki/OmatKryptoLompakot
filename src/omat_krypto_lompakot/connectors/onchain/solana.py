@@ -24,6 +24,8 @@ KNOWN_SPL_MINTS: Dict[str, Dict[str, str]] = {
     "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263": {"symbol": "BONK", "name": "Bonk", "display_group": "BONK"},
     "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH": {"symbol": "USDG", "name": "Global Dollar", "display_group": "USDG"},
     "LinkhB3afbBKb2EQQu7s7umdZceV3wcvAUJhQAfQ23L": {"symbol": "LINK", "name": "Chainlink", "display_group": "LINK"},
+    "BKvheJ3skKvXqUbfroAgCf8dFfUKJM4W38raUaygLiUS": {"symbol": "NUSD", "name": "Neutron USD", "display_group": "NUSD"},
+    "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij": {"symbol": "cbBTC", "name": "Coinbase Wrapped BTC", "display_group": "CBBTC"},
 }
 
 
@@ -45,24 +47,41 @@ class SolanaConnector:
         return all(c in BASE58_ALPHABET for c in addr)
 
     def _rpc_call(self, method: str, params: list) -> Any:
+        import time
         payload = {
             "jsonrpc": "2.0",
             "id": 1,
             "method": method,
             "params": params
         }
-        if self.client:
-            resp = self.client.post(self.rpc_url, json=payload, timeout=12.0)
-            resp.raise_for_status()
-            data = resp.json()
-        else:
-            with httpx.Client(timeout=12.0) as client:
-                resp = client.post(self.rpc_url, json=payload)
-                resp.raise_for_status()
-                data = resp.json()
+        data = None
+        for attempt in range(4):
+            try:
+                if self.client:
+                    resp = self.client.post(self.rpc_url, json=payload, timeout=15.0)
+                    if resp.status_code == 429:
+                        time.sleep(1.0 * (attempt + 1))
+                        continue
+                    resp.raise_for_status()
+                    data = resp.json()
+                else:
+                    with httpx.Client(timeout=15.0) as client:
+                        resp = client.post(self.rpc_url, json=payload)
+                        if resp.status_code == 429:
+                            time.sleep(1.0 * (attempt + 1))
+                            continue
+                        resp.raise_for_status()
+                        data = resp.json()
+                break
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429 and attempt < 3:
+                    time.sleep(1.0 * (attempt + 1))
+                    continue
+                raise
 
-        if "error" in data:
-            raise RuntimeError(f"Solana RPC -virhe ({method}): {data['error']}")
+        if not data or "error" in data:
+            err_msg = data.get("error") if data else "Ei vastausta RPC-solmulta"
+            raise RuntimeError(f"Solana RPC -virhe ({method}): {err_msg}")
         return data.get("result")
 
     def fetch_native_balance(self, address: str) -> str:
@@ -214,7 +233,8 @@ class SolanaConnector:
         return True
 
     def fetch_transactions(self, address: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Hakee Solanan viimeisimmät tapahtumatunnisteet (signatures)."""
+        """Hakee Solanan viimeisimmät tapahtumat ja tunnistaa token-vaihdot (DEX swapit)."""
+        import time
         txs: List[Dict[str, Any]] = []
         try:
             params = [address, {"limit": limit}]
@@ -230,21 +250,110 @@ class SolanaConnector:
                     else:
                         ts = utc_now_iso()
 
-                    memo = item.get("memo")
-                    err = item.get("err")
+                    # Oletusarvot
+                    kind = "transfer"
+                    asset_id = "solana:native"
+                    symbol = "SOL"
+                    amount_str = "0"
+                    fee_str = None
+                    raw_data = dict(item)
+
+                    # Haetaan tarkemmat tapahtumatiedot saldomuutosten ja vaihtojen tunnistamiseksi
+                    try:
+                        time.sleep(0.08)  # Pieni viive RPC rate-limitin välttämiseksi
+                        tx_detail = self._rpc_call("getTransaction", [sig, {"encoding": "jsonParsed", "maxSupportedTransactionVersion": 0}])
+                        if tx_detail and not tx_detail.get("meta", {}).get("err"):
+                            meta = tx_detail.get("meta", {})
+                            fee_lamports = meta.get("fee", 0)
+                            fee_sol = Decimal(str(fee_lamports)) / Decimal("1000000000")
+                            fee_str = f"{fee_sol:f} SOL" if fee_sol > 0 else None
+
+                            pre_tokens = meta.get("preTokenBalances", [])
+                            post_tokens = meta.get("postTokenBalances", [])
+
+                            pre_map: Dict[str, Decimal] = {}
+                            post_map: Dict[str, Decimal] = {}
+                            for p in pre_tokens:
+                                if p.get("owner") == address:
+                                    m = p.get("mint")
+                                    pre_map[m] = Decimal(str(p.get("uiTokenAmount", {}).get("uiAmountString") or "0"))
+                            for p in post_tokens:
+                                if p.get("owner") == address:
+                                    m = p.get("mint")
+                                    post_map[m] = Decimal(str(p.get("uiTokenAmount", {}).get("uiAmountString") or "0"))
+
+                            account_keys = tx_detail.get("transaction", {}).get("message", {}).get("accountKeys", [])
+                            my_idx = -1
+                            for idx, ak in enumerate(account_keys):
+                                pubkey = ak.get("pubkey") if isinstance(ak, dict) else str(ak)
+                                if pubkey == address:
+                                    my_idx = idx
+                                    break
+
+                            if my_idx >= 0:
+                                pre_bals = meta.get("preBalances", [])
+                                post_bals = meta.get("postBalances", [])
+                                if my_idx < len(pre_bals) and my_idx < len(post_bals):
+                                    pre_sol = Decimal(str(pre_bals[my_idx])) / Decimal("1000000000")
+                                    post_sol = Decimal(str(post_bals[my_idx])) / Decimal("1000000000")
+                                    sol_diff = (post_sol - pre_sol) + (fee_sol if my_idx == 0 else Decimal("0"))
+                                    if abs(sol_diff) > Decimal("0.0005"):
+                                        if sol_diff < 0:
+                                            pre_map["SOL"] = abs(sol_diff)
+                                            post_map["SOL"] = Decimal("0")
+                                        else:
+                                            pre_map["SOL"] = Decimal("0")
+                                            post_map["SOL"] = sol_diff
+
+                            all_m = set(list(pre_map.keys()) + list(post_map.keys()))
+                            diffs: Dict[str, Decimal] = {}
+                            for m in all_m:
+                                d = post_map.get(m, Decimal("0")) - pre_map.get(m, Decimal("0"))
+                                if abs(d) > Decimal("0.000001"):
+                                    diffs[m] = d
+
+                            decreased = [m for m, d in diffs.items() if d < 0]
+                            increased = [m for m, d in diffs.items() if d > 0]
+
+                            if decreased and increased:
+                                kind = "trade"
+                                from_m = decreased[0]
+                                to_m = increased[0]
+                                from_s = "SOL" if from_m == "SOL" else KNOWN_SPL_MINTS.get(from_m, {}).get("symbol", from_m[:6] + "...")
+                                to_s = "SOL" if to_m == "SOL" else KNOWN_SPL_MINTS.get(to_m, {}).get("symbol", to_m[:6] + "...")
+                                symbol = to_s
+                                asset_id = "solana:native" if to_m == "SOL" else f"solana:{to_m}"
+                                amount_str = f"{diffs[to_m]:f}"
+                                raw_data["is_swap"] = True
+                                raw_data["from_symbol"] = from_s
+                                raw_data["from_mint"] = from_m
+                                raw_data["from_amount"] = f"{abs(diffs[from_m]):f}"
+                                raw_data["to_symbol"] = to_s
+                                raw_data["to_mint"] = to_m
+                                raw_data["to_amount"] = f"{diffs[to_m]:f}"
+                                raw_data["fee"] = fee_str
+                            elif diffs:
+                                first_m = list(diffs.keys())[0]
+                                first_d = diffs[first_m]
+                                symbol = "SOL" if first_m == "SOL" else KNOWN_SPL_MINTS.get(first_m, {}).get("symbol", "TOKEN")
+                                asset_id = "solana:native" if first_m == "SOL" else f"solana:{first_m}"
+                                amount_str = f"{abs(first_d):f}"
+                    except Exception as e:
+                        logger.debug(f"Solana getTransaction epäonnistui tunnisteelle {sig}: {e}")
 
                     txs.append({
                         "hash": sig,
                         "log_index": 0,
                         "timestamp": ts,
-                        "kind": "transfer",
+                        "kind": kind,
                         "from_address": None,
                         "to_address": address,
-                        "asset_id": "solana:native",
-                        "amount": "0",  # Signatures-rajapinta ei palauta arvoa ilman getTransaction-kutsua
-                        "fee": None,
-                        "contract_address": None,
-                        "raw_json": json.dumps(item)
+                        "asset_id": asset_id,
+                        "symbol": symbol,
+                        "amount": amount_str,
+                        "fee": fee_str,
+                        "contract_address": None if asset_id == "solana:native" else asset_id.replace("solana:", ""),
+                        "raw_json": json.dumps(raw_data)
                     })
         except Exception as e:
             logger.warning(f"Solana transaktioiden haku epäonnistui osoitteelle {address}: {e}")
@@ -270,6 +379,18 @@ class SolanaConnector:
         )
 
         for tx in txs:
+            asset_id = tx.get("asset_id", native_asset_id)
+            if asset_id != native_asset_id:
+                symbol = tx.get("symbol", "TOKEN")
+                db.execute(
+                    """
+                    INSERT INTO assets (id, chain, contract_address, symbol, name, display_group)
+                    VALUES (?, 'solana', ?, ?, ?, ?)
+                    ON CONFLICT(id) DO NOTHING;
+                    """,
+                    (asset_id, tx.get("contract_address"), symbol, symbol, symbol)
+                )
+
             tx_id = f"sol_{account_id}_{tx['hash']}_{tx['log_index']}"
             is_spam, reason = spam_filter.evaluate_transaction(
                 chain="solana",
@@ -290,6 +411,9 @@ class SolanaConnector:
                 ON CONFLICT(account_id, chain, hash, log_index) DO UPDATE SET
                     timestamp = excluded.timestamp,
                     amount = excluded.amount,
+                    kind = excluded.kind,
+                    asset_id = excluded.asset_id,
+                    fee = excluded.fee,
                     is_spam = excluded.is_spam,
                     spam_reason = excluded.spam_reason,
                     raw_json = excluded.raw_json;

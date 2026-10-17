@@ -24,6 +24,8 @@ venv/
 *.secret
 secrets.yaml
 secrets.json
+koinly/
+*.png
 
 # IDE & Editor files
 .vscode/

@@ -34,3 +34,8 @@ omat-krypto-hub = "omat_krypto_lompakot.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "e2e: End-to-end tests requiring running hub server",
+]

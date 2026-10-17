@@ -166,8 +166,7 @@ SUPPORTED_EVM_CHAINS: Dict[str, Dict[str, Any]] = {
 }
 
 DEFAULT_HTTP_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/json"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
 }
 
 ERC20_BALANCE_ABI = [
@@ -859,16 +858,18 @@ class EvmConnector:
         return True
 
     def fetch_transactions(self, address: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Hakee Blockscoutista lompakon viimeisimmät transaktiot."""
+        """Hakee Blockscoutista lompakon viimeisimmät natiivitapahtumat ja token-siirrot."""
         if not self.blockscout_url:
             return []
         checksum_addr = Web3.to_checksum_address(address)
-        url = f"{self.blockscout_url}/addresses/{checksum_addr}/transactions"
+        tx_url = f"{self.blockscout_url}/addresses/{checksum_addr}/transactions"
+        tok_url = f"{self.blockscout_url}/addresses/{checksum_addr}/token-transfers"
 
         txs: List[Dict[str, Any]] = []
         try:
-            with httpx.Client(timeout=10.0, headers=DEFAULT_HTTP_HEADERS) as client:
-                resp = client.get(url)
+            with httpx.Client(timeout=15.0, headers=DEFAULT_HTTP_HEADERS) as client:
+                # 1. Natiivit transaktiot
+                resp = client.get(tx_url)
                 if resp.status_code == 200:
                     data = resp.json()
                     items = data.get("items", [])[:limit]
@@ -883,7 +884,7 @@ class EvmConnector:
                         kind = "transfer"
                         if "approve" in method:
                             kind = "approval"
-                        elif method in ("trade", "swap", "multicall"):
+                        elif any(m in method for m in ("trade", "swap", "multicall", "exactinput", "exactoutput")):
                             kind = "trade"
 
                         raw_value = item.get("value", "0")
@@ -900,9 +901,49 @@ class EvmConnector:
                             "from_address": from_addr,
                             "to_address": to_addr,
                             "asset_id": f"{self.chain}:native",
+                            "symbol": self.native_symbol,
                             "amount": f"{val_scaled:f}",
                             "fee": f"{fee_scaled:f} {self.native_symbol}" if fee_scaled else None,
                             "contract_address": None,
+                            "raw_json": json.dumps(item)
+                        })
+
+                # 2. ERC-20 Token-siirrot
+                resp_tok = client.get(tok_url)
+                if resp_tok.status_code == 200:
+                    data_tok = resp_tok.json()
+                    tok_items = data_tok.get("items", [])[:limit]
+                    for idx, item in enumerate(tok_items):
+                        tx_hash = item.get("transaction_hash", "")
+                        timestamp = item.get("timestamp", utc_now_iso())
+                        from_addr = item.get("from", {}).get("hash", "")
+                        to_addr = item.get("to", {}).get("hash", "")
+                        tok_info = item.get("token", {})
+                        symbol = tok_info.get("symbol") or "TOKEN"
+                        decimals = int(tok_info.get("decimals") or 18)
+                        contract_addr = tok_info.get("address")
+
+                        raw_val = item.get("total", {}).get("value") or "0"
+                        val_scaled = Decimal(str(raw_val)) / Decimal(10**decimals)
+                        log_idx = item.get("log_index") or (idx + 1)
+
+                        method = (item.get("method") or "").lower()
+                        kind = "transfer"
+                        if any(m in method for m in ("trade", "swap", "multicall", "exactinput", "exactoutput")):
+                            kind = "trade"
+
+                        txs.append({
+                            "hash": tx_hash,
+                            "log_index": log_idx,
+                            "timestamp": timestamp,
+                            "kind": kind,
+                            "from_address": from_addr,
+                            "to_address": to_addr,
+                            "asset_id": f"{self.chain}:{contract_addr.lower()}" if contract_addr else f"{self.chain}:{symbol.lower()}",
+                            "symbol": symbol,
+                            "amount": f"{val_scaled:f}",
+                            "fee": None,
+                            "contract_address": contract_addr,
                             "raw_json": json.dumps(item)
                         })
         except Exception as e:
@@ -938,6 +979,18 @@ class EvmConnector:
         )
 
         for tx in txs:
+            asset_id = tx.get("asset_id", native_asset_id)
+            if asset_id != native_asset_id:
+                symbol = tx.get("symbol", "TOKEN")
+                db.execute(
+                    """
+                    INSERT INTO assets (id, chain, contract_address, symbol, name, display_group)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(id) DO NOTHING;
+                    """,
+                    (asset_id, self.chain, tx.get("contract_address"), symbol, symbol, symbol)
+                )
+
             tx_id = f"evm_{account_id}_{tx['hash']}_{tx['log_index']}"
             is_spam, reason = spam_filter.evaluate_transaction(
                 chain=self.chain,

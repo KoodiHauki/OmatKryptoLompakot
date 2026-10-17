@@ -1,6 +1,7 @@
 import pytest
 from playwright.async_api import async_playwright
 
+@pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_portfolio_table_sorting_and_filtering():
     async with async_playwright() as p:

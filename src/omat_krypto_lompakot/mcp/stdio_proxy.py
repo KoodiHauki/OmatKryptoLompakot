@@ -55,16 +55,24 @@ def get_transactions(
     account_id: str = "",
     kind: str = "",
     include_spam: bool = False,
-    limit: int = 50
+    limit: int = 50,
+    offset: int = 0,
+    date_from: str = "",
+    date_to: str = "",
+    search: str = ""
 ) -> Dict[str, Any]:
-    """Hakee transaktiohistorian suodatettuna.
+    """Hakee transaktiohistorian suodatettuna ja rikastettuna FIFO-voitoilla/tappioilla.
     
     Args:
-        chain: Lohkoketju (esim. 'ethereum') tai tyhjä kaikille
+        chain: Lohkoketju (esim. 'ethereum', 'base', 'solana') tai tyhjä kaikille
         account_id: Tilin tunniste tai tyhjä kaikille
         kind: 'transfer', 'trade', 'deposit', 'withdrawal', 'approval' tai tyhjä
         include_spam: false (oletus: piilota roskatransaktiot), true (näytä myös roskat)
         limit: Maksimirivimäärä (oletus 50)
+        offset: Sivutuksen siirtymä (oletus 0)
+        date_from: Alkamispäivämäärä muodossa 'YYYY-MM-DD' tai tyhjä
+        date_to: Päättymispäivämäärä muodossa 'YYYY-MM-DD' tai tyhjä
+        search: Hakusana (osoite, transaktio-hash, tokenin symboli tai tilin nimi)
     """
     try:
         return client.get_transactions(
@@ -72,8 +80,21 @@ def get_transactions(
             account_id=account_id or None,
             kind=kind or None,
             include_spam=include_spam,
-            limit=limit
+            limit=limit,
+            offset=offset,
+            date_from=date_from or None,
+            date_to=date_to or None,
+            search=search or None
         )
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def get_fifo_summary() -> Dict[str, Any]:
+    """Hakee FIFO-laskennan yhteenvedon (voitot, tappiot, nettotulos EUR) ja luovutustapahtumien määrän."""
+    try:
+        return client.get_fifo_summary()
     except Exception as e:
         return {"error": str(e)}
 

@@ -15,6 +15,7 @@
     "get_total_portfolio",
     "get_balances_by_source",
     "get_transactions",
+    "get_fifo_summary",
     "check_connection_health",
     "trigger_sync"
   ]

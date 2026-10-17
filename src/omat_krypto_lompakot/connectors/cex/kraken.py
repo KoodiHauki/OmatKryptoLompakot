@@ -199,34 +199,42 @@ class KrakenConnector:
 
         return True, perm_res
 
-    def fetch_transactions(self, since_ms: Optional[int] = None, limit: int = 50) -> List[Dict[str, Any]]:
-        """Hakee kaupat, talletukset ja nostot Krakenista normalisoituina sanakirjoina."""
+    def fetch_transactions(self, since_ms: Optional[int] = None, limit: int = 50, fetch_all: bool = False) -> List[Dict[str, Any]]:
+        """Hakee kaupat, talletukset ja nostot Krakenista normalisoituina sanakirjoina sivutuksella."""
         import json
         txs: List[Dict[str, Any]] = []
 
-        # 1. Kaupat (Trades)
+        # 1. Kaupat (Trades) sivutuksella (ofs)
         try:
             if self.exchange.has.get("fetchMyTrades"):
-                trades = self.exchange.fetch_my_trades(since=since_ms, limit=limit)
-                for tr in trades:
-                    tr_id = str(tr.get("id") or tr.get("info", {}).get("ordertxid", "tx"))
-                    ts = tr.get("timestamp")
-                    iso_time = datetime.fromtimestamp(ts / 1000.0, timezone.utc).isoformat() if ts else utc_now_iso()
-                    raw_sym = tr.get("symbol", "UNKNOWN")
-                    norm_sym = normalize_kraken_symbol(raw_sym.split("/")[0])
-                    fee_info = tr.get("fee", {})
-                    fee_str = f"{fee_info.get('cost', '')} {fee_info.get('currency', '')}".strip()
+                ofs = 0
+                max_trades = 5000 if fetch_all else limit
+                while True:
+                    batch = self.exchange.fetch_my_trades(since=since_ms, params={"ofs": ofs})
+                    if not batch:
+                        break
+                    for tr in batch:
+                        tr_id = str(tr.get("id") or tr.get("info", {}).get("ordertxid", "tx"))
+                        ts = tr.get("timestamp")
+                        iso_time = datetime.fromtimestamp(ts / 1000.0, timezone.utc).isoformat() if ts else utc_now_iso()
+                        raw_sym = tr.get("symbol", "UNKNOWN")
+                        norm_sym = normalize_kraken_symbol(raw_sym.split("/")[0])
+                        fee_info = tr.get("fee", {})
+                        fee_str = f"{fee_info.get('cost', '')} {fee_info.get('currency', '')}".strip()
 
-                    txs.append({
-                        "hash": tr_id,
-                        "log_index": 0,
-                        "timestamp": iso_time,
-                        "kind": "trade",
-                        "symbol": norm_sym,
-                        "amount": f"{Decimal(str(tr.get('amount', 0))):f}",
-                        "fee": fee_str or None,
-                        "raw_json": json.dumps(tr.get("info", tr))
-                    })
+                        txs.append({
+                            "hash": tr_id,
+                            "log_index": 0,
+                            "timestamp": iso_time,
+                            "kind": "trade",
+                            "symbol": norm_sym,
+                            "amount": f"{Decimal(str(tr.get('amount', 0))):f}",
+                            "fee": fee_str or None,
+                            "raw_json": json.dumps(tr.get("info", tr))
+                        })
+                    if len(batch) < 50 or len(txs) >= max_trades:
+                        break
+                    ofs += len(batch)
         except Exception as e:
             logger.warning(f"Kraken fetchMyTrades epäonnistui: {e}")
 
@@ -280,9 +288,9 @@ class KrakenConnector:
 
         return txs
 
-    def sync_transactions_to_database(self, account_id: str, db: Database, since_ms: Optional[int] = None, limit: int = 50) -> int:
-        """Hakee ja tallentaa transaktiot SQLiteen."""
-        txs = self.fetch_transactions(since_ms=since_ms, limit=limit)
+    def sync_transactions_to_database(self, account_id: str, db: Database, since_ms: Optional[int] = None, limit: int = 1000, fetch_all: bool = True) -> int:
+        """Hakee ja tallentaa transaktiot SQLiteen täydellä sivutuksella."""
+        txs = self.fetch_transactions(since_ms=since_ms, limit=limit, fetch_all=fetch_all)
         saved_count = 0
 
         for tx in txs:

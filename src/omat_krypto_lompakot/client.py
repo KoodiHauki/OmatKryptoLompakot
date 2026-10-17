@@ -43,9 +43,12 @@ class CryptoHubClient:
         kind: Optional[str] = None,
         include_spam: bool = False,
         limit: int = 50,
-        offset: int = 0
+        offset: int = 0,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        search: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Hakee transaktiot suodatettuna."""
+        """Hakee transaktiot suodatettuna ja rikastettuna FIFO-tiedolla."""
         params: Dict[str, Any] = {
             "include_spam": include_spam,
             "limit": limit,
@@ -57,11 +60,22 @@ class CryptoHubClient:
             params["account_id"] = account_id
         if kind:
             params["kind"] = kind
+        if date_from:
+            params["date_from"] = date_from
+        if date_to:
+            params["date_to"] = date_to
+        if search:
+            params["search"] = search
 
         with self._client() as client:
             resp = client.get("/api/transactions", params=params)
             resp.raise_for_status()
             return resp.json()
+
+    def get_fifo_summary(self) -> Dict[str, Any]:
+        """Hakee FIFO-laskennan yhteenvedon (voitot, tappiot, nettotulos)."""
+        res = self.get_transactions(limit=1)
+        return res.get("summary", {})
 
     def trigger_sync(self, account_id: Optional[str] = None, force: bool = False) -> Dict[str, Any]:
         """Käynnistää portfolion tai yksittäisen tilin synkronoinnin."""

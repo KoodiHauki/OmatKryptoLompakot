@@ -17,6 +17,7 @@
     "get_transactions",
     "get_fifo_summary",
     "check_connection_health",
-    "trigger_sync"
+    "trigger_sync",
+    "import_coingecko_token"
   ]
 }

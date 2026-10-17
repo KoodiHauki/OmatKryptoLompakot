@@ -44,7 +44,18 @@ class CoinGeckoClient:
         if coingecko_id and coingecko_id.strip():
             return coingecko_id.strip().lower()
         sym_clean = symbol.upper().strip()
-        return DEFAULT_COINGECKO_MAP.get(sym_clean)
+        if sym_clean in DEFAULT_COINGECKO_MAP:
+            return DEFAULT_COINGECKO_MAP[sym_clean]
+        try:
+            row = self.db.fetch_one(
+                "SELECT coingecko_id FROM assets WHERE upper(symbol) = ? AND coingecko_id IS NOT NULL AND coingecko_id != '' LIMIT 1;",
+                (sym_clean,)
+            )
+            if row and row["coingecko_id"]:
+                return row["coingecko_id"].lower()
+        except Exception:
+            pass
+        return None
 
     def fetch_prices(self, cg_ids: List[str], vs_currencies: List[str] = ["EUR", "USD"]) -> Dict[str, Dict[str, float]]:
         """Hakee kurssit CoinGeckosta ja tallentaa ne tietokantaan."""

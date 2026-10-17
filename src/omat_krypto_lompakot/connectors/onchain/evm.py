@@ -592,7 +592,7 @@ class EvmConnector:
 
         raise RuntimeError(f"Kaikki RPC-solmut epäonnistuivat ketjulle {self.chain}: {last_error}")
 
-    def fetch_erc20_tokens(self, address: str) -> List[Dict[str, Any]]:
+    def fetch_erc20_tokens(self, address: str, db: Optional[Database] = None) -> List[Dict[str, Any]]:
         """Hakee ERC-20 tokenit ja saldot Blockscout v2 -rajapinnasta ja varmistaa tunnetut tokenit suoraan RPC:llä."""
         checksum_addr = Web3.to_checksum_address(address)
         tokens_by_contract: Dict[str, Dict[str, Any]] = {}
@@ -646,8 +646,27 @@ class EvmConnector:
             except Exception as e:
                 logger.warning(f"Blockscout tokenien haku epäonnistui osoitteelle {address} ({self.chain}): {e}")
 
-        # 2. Varmistetaan ketjun tunnetut tokenit (kuten WETH, USDC jne.) suoralla RPC:llä
-        known_tokens = KNOWN_EVM_TOKENS.get(self.chain, [])
+        # 2. Varmistetaan ketjun tunnetut ja tietokantaan lisätyt tokenit suoralla RPC:llä
+        known_tokens = list(KNOWN_EVM_TOKENS.get(self.chain, []))
+        if db:
+            try:
+                custom_assets = db.fetch_all(
+                    "SELECT contract_address, symbol, name, decimals, display_group, coingecko_id FROM assets WHERE chain = ? AND contract_address IS NOT NULL AND is_spam = 0;",
+                    (self.chain,)
+                )
+                for ca in custom_assets:
+                    c_addr = ca["contract_address"]
+                    if c_addr and not any(k["contract_address"].lower() == c_addr.lower() for k in known_tokens):
+                        known_tokens.append({
+                            "symbol": ca["symbol"],
+                            "name": ca["name"] or ca["symbol"],
+                            "contract_address": c_addr,
+                            "decimals": ca["decimals"] or 18,
+                            "display_group": ca["display_group"] or ca["symbol"].upper(),
+                            "coingecko_id": ca["coingecko_id"]
+                        })
+            except Exception as e:
+                logger.debug(f"Assets-kysely epäonnistui ketjulle {self.chain}: {e}")
         if known_tokens:
             w3_candidates: List[Web3] = []
             if self.w3:
@@ -740,7 +759,7 @@ class EvmConnector:
 
         try:
             native_balance = self.fetch_native_balance(address)
-            erc20_tokens = self.fetch_erc20_tokens(address)
+            erc20_tokens = self.fetch_erc20_tokens(address, db=db)
         except Exception as e:
             db.execute(
                 """

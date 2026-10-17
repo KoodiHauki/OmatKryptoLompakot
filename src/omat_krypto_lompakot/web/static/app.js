@@ -778,6 +778,95 @@ if (portfolioSearchInput) {
   });
 }
 
+// CoinGecko Token Import Modal Handlers
+const openAddTokenBtn = document.getElementById('open-add-token-btn');
+const addTokenModal = document.getElementById('add-token-modal');
+const closeTokenModalBtn = document.getElementById('close-token-modal-btn');
+const cancelTokenBtn = document.getElementById('cancel-token-btn');
+const coingeckoTokenForm = document.getElementById('coingecko-token-form');
+const coingeckoUrlInput = document.getElementById('coingecko-url-input');
+const tokenImportResult = document.getElementById('token-import-result');
+const submitTokenBtn = document.getElementById('submit-token-btn');
+const submitTokenSpinner = document.getElementById('submit-token-spinner');
+
+function openTokenModal() {
+  if (addTokenModal) {
+    addTokenModal.classList.remove('hidden');
+    if (tokenImportResult) tokenImportResult.classList.add('hidden');
+    if (coingeckoUrlInput) coingeckoUrlInput.focus();
+  }
+}
+
+function closeTokenModal() {
+  if (addTokenModal) {
+    addTokenModal.classList.add('hidden');
+  }
+}
+
+if (openAddTokenBtn) openAddTokenBtn.addEventListener('click', openTokenModal);
+if (closeTokenModalBtn) closeTokenModalBtn.addEventListener('click', closeTokenModal);
+if (cancelTokenBtn) cancelTokenBtn.addEventListener('click', closeTokenModal);
+
+if (coingeckoTokenForm) {
+  coingeckoTokenForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const url = coingeckoUrlInput.value.trim();
+    if (!url) return;
+
+    submitTokenBtn.disabled = true;
+    if (submitTokenSpinner) submitTokenSpinner.classList.remove('hidden');
+    if (tokenImportResult) tokenImportResult.classList.add('hidden');
+
+    try {
+      const resp = await fetch('/api/tokens/import-coingecko', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data.detail || 'Tokenin tuonti epäonnistui');
+      }
+
+      showToast(`Token ${data.symbol} (${data.name}) tuotu onnistuneesti!`, 'success');
+
+      if (tokenImportResult) {
+        const pEur = data.prices && data.prices.eur ? `${data.prices.eur} €` : 'Ei hintatietoa';
+        const pUsd = data.prices && data.prices.usd ? `$${data.prices.usd}` : '';
+        const assetsHtml = (data.registered_assets || []).map(a => `
+          <div class="flex items-center justify-between py-1 border-b border-gray-800 last:border-0">
+            <span class="font-semibold text-gray-300 uppercase">${a.chain}</span>
+            <span class="font-mono text-gray-400 text-[11px] truncate max-w-[260px]">${a.contract_address || 'Natiivi'}</span>
+          </div>
+        `).join('');
+
+        tokenImportResult.innerHTML = `
+          <div class="flex items-center space-x-3 pb-2 border-b border-gray-800">
+            ${data.image ? `<img src="${data.image}" class="w-6 h-6 rounded-full">` : ''}
+            <div>
+              <div class="font-bold text-white text-sm">${data.name} <span class="text-emerald-400">(${data.symbol})</span></div>
+              <div class="text-[11px] text-gray-400">ID: ${data.coin_id} &bull; Kurssi: ${pEur} ${pUsd ? `(${pUsd})` : ''}</div>
+            </div>
+          </div>
+          <div class="pt-2">
+            <div class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Tallennetut lohkoketjusopimukset:</div>
+            ${assetsHtml || '<div class="text-gray-500">Ei tunnettuja sopimuksia</div>'}
+          </div>
+        `;
+        tokenImportResult.classList.remove('hidden');
+      }
+
+      loadPortfolio();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      submitTokenBtn.disabled = false;
+      if (submitTokenSpinner) submitTokenSpinner.classList.add('hidden');
+    }
+  });
+}
+
 // Initial Load
 document.addEventListener('DOMContentLoaded', () => {
   loadPortfolio();
@@ -785,3 +874,4 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAccountSelect(state.accounts);
   });
 });
+

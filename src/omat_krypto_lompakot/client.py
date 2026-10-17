@@ -87,3 +87,11 @@ class CryptoHubClient:
             resp = client.post("/api/sync", json=payload)
             resp.raise_for_status()
             return resp.json()
+
+    def import_coingecko_token(self, url: str) -> Dict[str, Any]:
+        """Tuo tokenin CoinGecko-osoitteesta järjestelmään ja rekisteröi sen sopimukset."""
+        with self._client() as client:
+            resp = client.post("/api/tokens/import-coingecko", json={"url": url})
+            resp.raise_for_status()
+            return resp.json()
+

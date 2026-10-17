@@ -22,6 +22,7 @@ Käytettävissä olevat työkalut:
 - `get_fifo_summary()`: Hakee verotuksen FIFO-yhteenvedon (voitot, tappiot, nettotulos EUR sekä luovutusten lukumäärä).
 - `check_connection_health()`: Tarkistaa CEX API -avainten vanhenemisen ja yhteysstatukset.
 - `trigger_sync(account_id, force)`: Käynnistää taustapäivityksen.
+- `import_coingecko_token(url)`: Tuo uuden tokenin CoinGecko-osoitteella tai -tunnisteella ja rekisteröi sen sopimukset.
 
 ## Käyttöohje tekoälyagentille
 Kun käyttäjä kysyy:
@@ -30,5 +31,6 @@ Kun käyttäjä kysyy:
 - *"Paljonko minulla on verotettavia luovutusvoittoja tai -tappioita?"* -> Kutsu `get_fifo_summary()`.
 - *"Näytä viimeisimmät siirtoni"* -> Kutsu `get_transactions()`.
 - *"Ovatko API-avaimeni vanhenemassa?"* -> Kutsu `check_connection_health()`.
+- *"Lisää uusi token: https://www.coingecko.com/en/coins/nest-2"* -> Kutsu `import_coingecko_token(url)`.
 
 Jos vastauksessa tulee varoituksia (`warnings`), huomauta niistä käyttäjälle selkeästi.

@@ -545,3 +545,23 @@ def delete_token_override(chain: str, contract_address: str):
         (chain.lower().strip(), clean_addr)
     )
     return {"status": "ok", "deleted": f"{chain}:{clean_addr}"}
+
+
+class ImportCoinGeckoTokenRequest(BaseModel):
+    url: str
+
+
+@router.post("/tokens/import-coingecko")
+def import_coingecko_token(req: ImportCoinGeckoTokenRequest):
+    """Tuo tokenin CoinGecko-osoitteesta ja rekisteröi sen kaikki lohkoketjusopimukset."""
+    from .server import db
+    from ..services.coingecko_importer import CoinGeckoTokenImporter
+    importer = CoinGeckoTokenImporter(db)
+    try:
+        res = importer.import_token(req.url)
+        return res
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

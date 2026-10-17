@@ -91,7 +91,7 @@ class SolanaConnector:
         sol_amount = Decimal(str(lamports)) / Decimal(10**9)
         return f"{sol_amount:f}"
 
-    def fetch_spl_tokens(self, address: str) -> List[Dict[str, Any]]:
+    def fetch_spl_tokens(self, address: str, db: Optional[Database] = None) -> List[Dict[str, Any]]:
         """Hakee SPL-tokenit käyttäjän lompakosta."""
         tokens: List[Dict[str, Any]] = []
         try:
@@ -114,6 +114,21 @@ class SolanaConnector:
                     dec_val = Decimal(ui_amount_str)
                     if dec_val > 0:
                         known = KNOWN_SPL_MINTS.get(mint)
+                        if not known and db:
+                            try:
+                                a_row = db.fetch_one(
+                                    "SELECT symbol, name, display_group, decimals FROM assets WHERE chain = 'solana' AND contract_address = ?;",
+                                    (mint,)
+                                )
+                                if a_row:
+                                    known = {
+                                        "symbol": a_row["symbol"],
+                                        "name": a_row["name"] or a_row["symbol"],
+                                        "display_group": a_row["display_group"] or a_row["symbol"]
+                                    }
+                            except Exception:
+                                pass
+
                         symbol = known["symbol"] if known else f"{mint[:4]}...{mint[-4:]}"
                         name = known["name"] if known else f"SPL {symbol}"
                         disp_group = known["display_group"] if known else symbol
@@ -151,7 +166,7 @@ class SolanaConnector:
 
         try:
             native_balance = self.fetch_native_balance(address)
-            spl_tokens = self.fetch_spl_tokens(address)
+            spl_tokens = self.fetch_spl_tokens(address, db=db)
         except Exception as e:
             db.execute(
                 """

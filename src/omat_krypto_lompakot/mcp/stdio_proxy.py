@@ -126,5 +126,23 @@ def trigger_sync(account_id: str = "", force: bool = False) -> Dict[str, Any]:
         return {"error": str(e)}
 
 
+@mcp.tool()
+def import_coingecko_token(url: str) -> Dict[str, Any]:
+    """Tuo uuden tokenin järjestelmään suoraan CoinGecko-osoitteella tai -tunnisteella.
+    
+    Ohjelma siivoaa ylimääräiset parametrit osoitteesta, poimii automaattisesti nimen,
+    tickerin ja kaikkien tuettujen lohkoketjujen sopimusosoitteet, tallentaa ne
+    sallituksi omaisuuseräksi sekä hakee tuoreet kurssit.
+    
+    Args:
+        url: CoinGecko-sivun osoite (esim. 'https://www.coingecko.com/en/coins/nest-2') tai kolikon ID ('nest-2')
+    """
+    try:
+        return client.import_coingecko_token(url)
+    except Exception as e:
+        return {"error": str(e)}
+
+
 if __name__ == "__main__":
     mcp.run()
+

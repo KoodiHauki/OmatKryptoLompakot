@@ -97,6 +97,46 @@ portfolio = client.get_portfolio()
 print(f"Kokonaisarvo: {portfolio.total_eur} EUR")
 ```
 
+## 🪙 CoinGecko-tokenien tuonti
+Voit lisätä uusia tokeneita järjestelmään suoraan CoinGecko-osoitteella:
+- GUI: Klikkaa yläpalkista **`🪙 Lisää CoinGecko-token`** ja liitä osoite (esim. `https://www.coingecko.com/en/coins/nest-2`).
+- Python SDK: `client.import_coingecko_token("https://www.coingecko.com/en/coins/nest-2")`
+- MCP: `import_coingecko_token(url)`
+
+Ohjelma karsii automaattisesti ylimääräiset parametrit, poimii nimen, tickerin, desimaalit ja kaikkien tuettujen lohkoketjujen sopimusosoitteet, hakee kurssit sekä asettaa tokenin sallituksi.
+
+---
+
+## 🗑️ Ohjelman ja tietojen poisto (Uninstaller)
+
+Jos haluat poistaa ohjelman tai nollata kaikki sen tallentamat tiedot:
+
+### Python-skripti (Cross-platform):
+```bash
+# Esikatsele poistettavat kohteet tekemättä muutoksia:
+python uninstall.py --dry-run
+
+# Suorita poisto interaktiivisesti (kysyy vahvistuksen):
+python uninstall.py
+
+# Poista myös Python .venv -virtuaaliympäristö:
+python uninstall.py --include-venv
+```
+
+### PowerShell-skripti (Windows):
+```powershell
+# Esikatsele poistettavat kohteet:
+.\uninstall.ps1 -DryRun
+
+# Suorita poisto:
+.\uninstall.ps1
+```
+
+**Mitä skripti poistaa:**
+1. **Ulkoinen datahakemisto ja tietokannat:** `%LOCALAPPDATA%\OmatKryptoLompakot` (`wallets.db`, varmuuskopiot, WAL-tiedostot)
+2. **Käyttöjärjestelmän turvasäilö:** Kaikki API-avaimet Windows Credential Managerista / Keyringistä (`omatkryptolompakot`)
+3. **Projektin välimuistit:** `.pytest_cache`, `__pycache__`
+
 ---
 
 ## 🧪 Testaus
@@ -112,3 +152,4 @@ pytest
 - [SUUNNITELMA.md](SUUNNITELMA.md) – Kattava järjestelmäarkkitehtuuri ja toteutussuunnitelma
 - [PAATOKSET_JA_SUUNNITTELUHISTORIA.md](PAATOKSET_JA_SUUNNITTELUHISTORIA.md) – Päätösloki ja arkkitehtuurivalintojen perustelut
 - [KOMMENTIT.md](KOMMENTIT.md) – Suunnitelman asiantuntija-arvio ja täsmennykset
+

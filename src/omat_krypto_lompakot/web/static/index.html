@@ -44,6 +44,10 @@
           </svg>
           Päivitä kaikki
         </button>
+        <button id="open-add-token-btn" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white transition flex items-center shadow-md shadow-emerald-700/20">
+          <span class="mr-1.5">🪙</span>
+          Lisää CoinGecko-token
+        </button>
         <button id="open-add-modal-btn" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 transition flex items-center">
           <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
@@ -406,12 +410,49 @@
     </div>
   </div>
 
+  <!-- ADD COINGECKO TOKEN MODAL -->
+  <div id="add-token-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="glass w-full max-w-lg rounded-2xl border border-gray-800 p-6 space-y-5 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-gray-800 pb-4">
+        <div class="flex items-center space-x-2">
+          <span class="text-xl">🪙</span>
+          <h3 class="font-bold text-base text-white">Lisää token CoinGeckosta</h3>
+        </div>
+        <button id="close-token-modal-btn" class="text-gray-400 hover:text-white">&times;</button>
+      </div>
+
+      <p class="text-xs text-gray-400 leading-relaxed">
+        Syötä tokenin CoinGecko-osoite (esim. <code class="text-emerald-400">https://www.coingecko.com/en/coins/nest-2</code>).
+        Ohjelma poistaa ylimääräiset parametrit ja poimii automaattisesti nimen, tickerin, desimaalit sekä kaikki lohkoketjusopimukset.
+      </p>
+
+      <form id="coingecko-token-form" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-300 mb-1">CoinGecko URL tai kolikon tunniste</label>
+          <input id="coingecko-url-input" required placeholder="https://www.coingecko.com/en/coins/nest-2" class="w-full px-3 py-2 text-xs rounded-lg bg-gray-900 border border-gray-700 text-white focus:outline-none focus:border-emerald-500 font-mono">
+        </div>
+
+        <div id="token-import-result" class="hidden rounded-xl border border-gray-800 bg-gray-900/80 p-3 space-y-2 text-xs">
+          <!-- Populated dynamically via JS -->
+        </div>
+
+        <div class="pt-2 flex justify-end space-x-3">
+          <button type="button" id="cancel-token-btn" class="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white">Sulje</button>
+          <button type="submit" id="submit-token-btn" class="px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition shadow-lg shadow-emerald-600/30 flex items-center">
+            <span id="submit-token-spinner" class="hidden mr-2">⏳</span>
+            Hae ja tallenna
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <footer class="glass border-t border-gray-800 py-4 mt-auto">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-xs text-gray-500">
-      OmatKryptoLompakot Hub v0.1.0 &bull; Kuuntelee osoitteessa <code>0.0.0.0:8000</code> &bull; Localhost: <a href="http://127.0.0.1:8000" class="text-indigo-400 hover:underline">127.0.0.1:8000</a>
+      OmatKryptoLompakot Hub v0.2.0 &bull; Kuuntelee osoitteessa <code>0.0.0.0:8000</code> &bull; Localhost: <a href="http://127.0.0.1:8000" class="text-indigo-400 hover:underline">127.0.0.1:8000</a>
     </div>
   </footer>
 
-  <script src="/static/app.js?v=2.0.1"></script>
+  <script src="/static/app.js?v=2.1.0"></script>
 </body>
 </html>

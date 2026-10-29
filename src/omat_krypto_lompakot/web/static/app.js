@@ -168,6 +168,19 @@ function updatePortfolioSortHeaders() {
   });
 }
 
+function formatSyncDate(isoStr) {
+  if (!isoStr) return 'Ei vielä päivitetty';
+  try {
+    const dt = new Date(isoStr);
+    if (isNaN(dt.getTime())) return isoStr;
+    const dateStr = dt.toLocaleDateString('fi-FI');
+    const timeStr = dt.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return `${dateStr} klo ${timeStr}`;
+  } catch (e) {
+    return isoStr;
+  }
+}
+
 function renderPortfolioGroups(groups) {
   const tbody = document.getElementById('portfolio-groups-tbody');
   const countBadge = document.getElementById('portfolio-groups-count');
@@ -249,7 +262,8 @@ function renderPortfolioGroups(groups) {
     
     // Details pills
     const detailsPills = (g.items || []).map(it => {
-      return `<span class="inline-block px-2 py-0.5 text-[11px] rounded bg-gray-800 text-gray-300 mr-1.5 mb-1 border border-gray-700/60 font-mono">${it.account_name}: ${it.amount} ${it.symbol}</span>`;
+      const syncInfo = it.last_synced_at ? ` (Päivitetty: ${formatSyncDate(it.last_synced_at)})` : '';
+      return `<span class="inline-block px-2 py-0.5 text-[11px] rounded bg-gray-800 text-gray-300 mr-1.5 mb-1 border border-gray-700/60 font-mono" title="${it.account_name}: ${it.amount} ${it.symbol}${syncInfo}">${it.account_name}: ${it.amount} ${it.symbol}</span>`;
     }).join('');
 
     return `
@@ -291,6 +305,8 @@ function renderAccounts(accounts) {
       colorBadge = '<span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20">Virhe / Vaara</span>';
     }
 
+    const syncDateFormatted = formatSyncDate(acc.last_success_at);
+
     let metaDetails = '';
     if (acc.type === 'cex' && acc.credentials) {
       const c = acc.credentials;
@@ -299,6 +315,7 @@ function renderAccounts(accounts) {
           <div class="flex justify-between"><span>Avain:</span> <span class="font-mono text-gray-300">${c.key_hint}</span></div>
           <div class="flex justify-between"><span>Oikeudet:</span> <span class="${c.can_trade || c.can_withdraw ? 'text-rose-400 font-bold' : 'text-emerald-400'}">${c.can_trade || c.can_withdraw ? 'Kaupankäynti / Nosto (VAARA)' : 'Vain Luku'}</span></div>
           ${c.expires_at ? `<div class="flex justify-between"><span>Vanhenee:</span> <span class="font-mono">${c.expires_at.slice(0, 10)}</span></div>` : ''}
+          <div class="flex justify-between pt-1 border-t border-gray-800/60"><span>Päivitetty:</span> <span class="font-mono text-indigo-300 font-medium">${syncDateFormatted}</span></div>
         </div>
       `;
     } else if (acc.type === 'onchain' && acc.wallets && acc.wallets.length > 0) {
@@ -308,17 +325,28 @@ function renderAccounts(accounts) {
         <div class="text-[11px] text-gray-400 space-y-1 bg-gray-900/60 p-2.5 rounded-lg border border-gray-800">
           <div class="flex justify-between"><span>Ketju:</span> <span class="capitalize text-gray-200">${w.chain}</span></div>
           <div class="flex justify-between"><span>Osoite:</span> <span class="font-mono text-indigo-300" title="${w.address}">${shortAddr}</span></div>
+          <div class="flex justify-between pt-1 border-t border-gray-800/60"><span>Päivitetty:</span> <span class="font-mono text-indigo-300 font-medium">${syncDateFormatted}</span></div>
+        </div>
+      `;
+    } else {
+      metaDetails = `
+        <div class="text-[11px] text-gray-400 space-y-1 bg-gray-900/60 p-2.5 rounded-lg border border-gray-800">
+          <div class="flex justify-between pt-1 border-t border-gray-800/60"><span>Päivitetty:</span> <span class="font-mono text-indigo-300 font-medium">${syncDateFormatted}</span></div>
         </div>
       `;
     }
 
     return `
-      <div class="glass p-5 rounded-2xl flex flex-col justify-between space-y-4 border border-gray-800/80">
+      <div class="glass p-5 rounded-2xl flex flex-col justify-between space-y-4 border border-gray-800/80 hover:border-gray-700/80 transition shadow-lg">
         <div class="space-y-3">
           <div class="flex items-start justify-between">
             <div>
               <div class="text-xs uppercase font-bold tracking-wider text-indigo-400">${acc.venue} (${acc.type.toUpperCase()})</div>
               <h3 class="font-bold text-base text-white mt-0.5">${acc.name}</h3>
+              <div class="text-[11px] text-gray-400 mt-1 flex items-center space-x-1.5">
+                <span class="inline-block w-1.5 h-1.5 rounded-full ${acc.last_success_at ? 'bg-emerald-400' : 'bg-gray-500'}"></span>
+                <span>Päivitetty: <span class="font-mono text-gray-200 font-medium">${syncDateFormatted}</span></span>
+              </div>
             </div>
             ${colorBadge}
           </div>

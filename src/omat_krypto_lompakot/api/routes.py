@@ -108,7 +108,8 @@ def list_accounts():
             "last_error_type": acc["last_error_type"],
             "last_error_msg": acc["last_error_msg"],
             "credentials": c_info,
-            "wallets": w_list
+            "wallets": w_list,
+            "created_at": acc["created_at"],
         })
 
     return {"accounts": results}

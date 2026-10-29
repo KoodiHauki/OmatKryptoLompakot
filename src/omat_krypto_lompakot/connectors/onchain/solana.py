@@ -221,16 +221,23 @@ class SolanaConnector:
         for tok in spl_tokens:
             mint = tok["contract_address"]
             asset_id = f"solana:{mint}"
+            coingecko_id = tok.get("coingecko_id")
+            if mint == "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v":
+                coingecko_id = "usd-coin"
+                tok["symbol"] = "USDC"
+                tok["display_group"] = "USDC"
+
             db.execute(
                 """
-                INSERT INTO assets (id, chain, contract_address, symbol, name, decimals, display_group)
-                VALUES (?, 'solana', ?, ?, ?, ?, ?)
+                INSERT INTO assets (id, chain, contract_address, symbol, name, decimals, display_group, coingecko_id)
+                VALUES (?, 'solana', ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     symbol = excluded.symbol,
                     name = excluded.name,
-                    display_group = excluded.display_group;
+                    display_group = excluded.display_group,
+                    coingecko_id = COALESCE(excluded.coingecko_id, assets.coingecko_id);
                 """,
-                (asset_id, mint, tok["symbol"], tok.get("name", f"SPL {tok['symbol']}"), tok["decimals"], tok.get("display_group", tok["symbol"]))
+                (asset_id, mint, tok["symbol"], tok.get("name", f"SPL {tok['symbol']}"), tok["decimals"], tok.get("display_group", tok["symbol"]), coingecko_id)
             )
 
             bal_id = f"{account_id}:{asset_id}:wallet"

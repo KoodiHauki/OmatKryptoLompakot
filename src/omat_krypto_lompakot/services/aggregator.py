@@ -20,6 +20,7 @@ class AssetHolding(BaseModel):
     venue: str
     account_name: str
     kind: str
+    coingecko_id: Optional[str] = None
 
 
 class GroupHolding(BaseModel):
@@ -110,6 +111,7 @@ class PortfolioAggregator:
                 a.symbol,
                 a.name as asset_name,
                 a.display_group,
+                a.coingecko_id,
                 acc.name as account_name,
                 acc.venue,
                 p_eur.price as price_eur,
@@ -119,7 +121,7 @@ class PortfolioAggregator:
             JOIN assets a ON b.asset_id = a.id
             LEFT JOIN prices p_eur ON a.id = p_eur.asset_id AND p_eur.currency = 'EUR'
             LEFT JOIN prices p_usd ON a.id = p_usd.asset_id AND p_usd.currency = 'USD'
-            WHERE acc.is_active = 1 AND CAST(b.amount AS NUMERIC) > 0;
+            WHERE acc.is_active = 1 AND COALESCE(a.is_spam, 0) = 0 AND CAST(b.amount AS NUMERIC) > 0;
             """
         )
 
@@ -166,7 +168,8 @@ class PortfolioAggregator:
                 value_usd=val_usd_str,
                 venue=row["venue"],
                 account_name=row["account_name"],
-                kind=row["kind"]
+                kind=row["kind"],
+                coingecko_id=row.get("coingecko_id")
             )
 
             if group_key not in groups_map:

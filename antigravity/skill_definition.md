@@ -9,7 +9,7 @@ Tämä taito mahdollistaa käyttäjän omien kryptovaluuttasijoitusten, lompakoi
 
 ## Vaatimukset
 - OmatKryptoLompakot Hub on käynnissä taustalla (`python run.py`).
-- Hub kuuntelee osoitteessa `http://127.0.0.1:8000`.
+- Hub kuuntelee osoitteessa `http://127.0.0.1:8001` (tai `https://wallets.lan.ikkala.com`).
 
 ## MCP-työkalut
 Taito käyttää FastMCP stdio-proxya:

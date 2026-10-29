@@ -52,7 +52,7 @@ class BinancePricingClient:
         }
 
         try:
-            with httpx.Client(timeout=10.0, headers=headers) as client:
+            with httpx.Client(timeout=20.0, headers=headers) as client:
                 resp = client.get(url)
                 if resp.status_code == 200:
                     data = resp.json()
@@ -144,10 +144,10 @@ class BinancePricingClient:
         """Hakee kurssit kaikille lompakoiden ja pörssien aktiivisille omaisuuserille ja tallentaa SQLiteen."""
         assets = self.db.fetch_all(
             """
-            SELECT DISTINCT a.id, a.symbol, a.coingecko_id
+            SELECT DISTINCT a.id, a.chain, a.contract_address, a.symbol, a.coingecko_id
             FROM assets a
             JOIN balances b ON a.id = b.asset_id
-            WHERE CAST(b.amount AS NUMERIC) > 0;
+            WHERE COALESCE(a.is_spam, 0) = 0 AND CAST(b.amount AS NUMERIC) > 0;
             """
         )
 
@@ -161,6 +161,18 @@ class BinancePricingClient:
 
         for a in assets:
             sym = a["symbol"]
+            contract_addr = a.get("contract_address")
+            coingecko_id = a.get("coingecko_id")
+
+            # Sopimustokeneita (ERC-20, SPL) ei saa KOSKAAN hinnoitella suoraan pelkän symbolin
+            # perusteella Binancesta, koska huijaustoken (kuten Bobby The Cat 'BTC')
+            # saisi aidon Bitcoinin hinnan!
+            if contract_addr:
+                cid = self.coingecko_fallback.resolve_coingecko_id(sym, coingecko_id, is_contract=True)
+                if cid:
+                    missing_on_binance.append(a)
+                continue
+
             prices = self.resolve_prices_for_symbol(sym, tickers) if tickers else None
 
             if prices:
@@ -179,11 +191,12 @@ class BinancePricingClient:
             else:
                 missing_on_binance.append(a)
 
-        # Fallback CoinGeckoon niille joita ei löytynyt Binancesta
+        # Fallback CoinGeckoon niille joita ei löytynyt Binancesta (ja sallituille sopimustokeneille)
         if missing_on_binance:
             cg_ids_to_fetch = set()
             for ma in missing_on_binance:
-                cid = self.coingecko_fallback.resolve_coingecko_id(ma["symbol"], ma.get("coingecko_id"))
+                is_contract = bool(ma.get("contract_address"))
+                cid = self.coingecko_fallback.resolve_coingecko_id(ma["symbol"], ma.get("coingecko_id"), is_contract=is_contract)
                 if cid:
                     cg_ids_to_fetch.add(cid)
             if cg_ids_to_fetch:

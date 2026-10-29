@@ -40,15 +40,18 @@ class CoinGeckoClient:
         self.base_url = base_url
         self.negative_cache: Set[str] = set()
 
-    def resolve_coingecko_id(self, symbol: str, coingecko_id: Optional[str] = None) -> Optional[str]:
+    def resolve_coingecko_id(self, symbol: str, coingecko_id: Optional[str] = None, is_contract: bool = False) -> Optional[str]:
         if coingecko_id and coingecko_id.strip():
             return coingecko_id.strip().lower()
+        if is_contract:
+            # Sopimustokeneita ei saa koskaan arvata pelkän symbolin perusteella
+            return None
         sym_clean = symbol.upper().strip()
         if sym_clean in DEFAULT_COINGECKO_MAP:
             return DEFAULT_COINGECKO_MAP[sym_clean]
         try:
             row = self.db.fetch_one(
-                "SELECT coingecko_id FROM assets WHERE upper(symbol) = ? AND coingecko_id IS NOT NULL AND coingecko_id != '' LIMIT 1;",
+                "SELECT coingecko_id FROM assets WHERE upper(symbol) = ? AND contract_address IS NULL AND coingecko_id IS NOT NULL AND coingecko_id != '' LIMIT 1;",
                 (sym_clean,)
             )
             if row and row["coingecko_id"]:
@@ -77,9 +80,13 @@ class CoinGeckoClient:
                     
                     for cid, price_map in data.items():
                         results[cid] = price_map
-                        # Etsitään kaikki assetit joilla on tämä coingecko_id tai symboli
+                        # Etsitään kaikki assetit joilla on tämä coingecko_id tai (jos natiivi) tämä symboli
                         matching_assets = self.db.fetch_all(
-                            "SELECT id FROM assets WHERE lower(coingecko_id) = ? OR lower(symbol) = ?;",
+                            """
+                            SELECT id FROM assets 
+                            WHERE (lower(coingecko_id) = ? OR (contract_address IS NULL AND lower(symbol) = ?))
+                              AND COALESCE(is_spam, 0) = 0;
+                            """,
                             (cid, cid)
                         )
                         for asset_row in matching_assets:

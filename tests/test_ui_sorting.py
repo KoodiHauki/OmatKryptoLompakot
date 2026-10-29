@@ -20,8 +20,8 @@ async def test_portfolio_table_sorting_and_filtering():
             sys.exit(1)
 
         page = await browser.new_page()
-        print("Navigating to http://127.0.0.1:8000 ...")
-        await page.goto("http://127.0.0.1:8000", wait_until="networkidle")
+        print("Navigating to http://127.0.0.1:8001 ...")
+        await page.goto("http://127.0.0.1:8001", wait_until="networkidle")
         
         # Wait for table rows to load
         await page.wait_for_selector("#portfolio-groups-tbody tr td:nth-child(4)")

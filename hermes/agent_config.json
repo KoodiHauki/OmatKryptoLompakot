@@ -7,7 +7,7 @@
       "command": "python",
       "args": ["-m", "omat_krypto_lompakot.mcp.stdio_proxy"],
       "env": {
-        "OMAT_KRYPTO_HUB_URL": "http://127.0.0.1:8000"
+        "OMAT_KRYPTO_HUB_URL": "http://127.0.0.1:8001"
       }
     }
   },

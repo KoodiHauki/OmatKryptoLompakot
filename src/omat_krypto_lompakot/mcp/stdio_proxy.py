@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from fastmcp import FastMCP
 from ..client import CryptoHubClient
 
-DEFAULT_BASE_URL = os.environ.get("OMAT_KRYPTO_HUB_URL", "http://127.0.0.1:8000")
+DEFAULT_BASE_URL = os.environ.get("OMAT_KRYPTO_HUB_URL", "http://127.0.0.1:8001")
 client = CryptoHubClient(base_url=DEFAULT_BASE_URL)
 
 mcp = FastMCP("OmatKryptoLompakot Hub")
@@ -122,6 +122,36 @@ def trigger_sync(account_id: str = "", force: bool = False) -> Dict[str, Any]:
     """
     try:
         return client.trigger_sync(account_id=account_id or None, force=force)
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@mcp.tool()
+def list_coingecko_tokens() -> Dict[str, Any]:
+    """Listaa kaikki järjestelmässä seurattavat ja CoinGeckon kautta hinnoitellut tokenit, niiden kurssit, saldot ja EUR-arvot."""
+    try:
+        portfolio = client.get_portfolio()
+        cg_tokens = []
+        for g in portfolio.get("groups", []):
+            for item in g.get("items", []):
+                if item.get("coingecko_id"):
+                    cg_tokens.append({
+                        "symbol": item.get("symbol"),
+                        "name": item.get("name"),
+                        "coingecko_id": item.get("coingecko_id"),
+                        "venue": item.get("venue"),
+                        "account_name": item.get("account_name"),
+                        "amount": item.get("amount"),
+                        "price_eur": item.get("price_eur"),
+                        "value_eur": item.get("value_eur"),
+                        "price_usd": item.get("price_usd"),
+                        "value_usd": item.get("value_usd"),
+                    })
+        return {
+            "status": "ok",
+            "count": len(cg_tokens),
+            "tokens": cg_tokens
+        }
     except Exception as e:
         return {"error": str(e)}
 

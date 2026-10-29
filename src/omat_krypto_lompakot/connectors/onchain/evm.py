@@ -842,24 +842,41 @@ class EvmConnector:
                 display_group = symbol.upper()
 
             coingecko_id = tok.get("coingecko_id")
+            c_lower = (contract_addr or "").lower()
             if not coingecko_id:
-                if symbol.upper() == "VELO":
+                if self.chain == "optimism" and c_lower == "0x9560e827af36c94d2ac33a39bce1fe78631088db":
                     coingecko_id = "velodrome-finance"
-                elif symbol.upper() == "HYPE":
-                    coingecko_id = "hyperliquid"
+                elif self.chain == "base" and c_lower == "0x940181a94a35a4569e4529a3cdfb74e38fd98631":
+                    coingecko_id = "aerodrome-finance"
+                elif self.chain == "base" and c_lower == "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b":
+                    coingecko_id = "virtual-protocol"
+                elif self.chain == "base" and c_lower == "0x4200000000000000000000000000000000000006":
+                    coingecko_id = "weth"
+                elif self.chain == "base" and c_lower == "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf":
+                    coingecko_id = "coinbase-wrapped-btc"
+
+            is_spam = 0
+            if contract_addr:
+                override = db.fetch_one(
+                    "SELECT action FROM token_overrides WHERE chain = ? AND lower(contract_address) = ?;",
+                    (self.chain, c_lower)
+                )
+                if override and override["action"] == "deny":
+                    is_spam = 1
 
             db.execute(
                 """
-                INSERT INTO assets (id, chain, contract_address, symbol, name, decimals, display_group, coingecko_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO assets (id, chain, contract_address, symbol, name, decimals, display_group, coingecko_id, is_spam)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     symbol = excluded.symbol,
                     name = excluded.name,
                     decimals = excluded.decimals,
                     display_group = excluded.display_group,
-                    coingecko_id = COALESCE(excluded.coingecko_id, assets.coingecko_id);
+                    coingecko_id = COALESCE(excluded.coingecko_id, assets.coingecko_id),
+                    is_spam = CASE WHEN excluded.is_spam = 1 THEN 1 ELSE assets.is_spam END;
                 """,
-                (asset_id, self.chain, contract_addr, symbol, tok.get("name", symbol), tok.get("decimals", 18), display_group, coingecko_id)
+                (asset_id, self.chain, contract_addr, symbol, tok.get("name", symbol), tok.get("decimals", 18), display_group, coingecko_id, is_spam)
             )
 
             bal_id = f"{account_id}:{asset_id}:wallet"

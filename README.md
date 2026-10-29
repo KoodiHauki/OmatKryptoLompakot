@@ -3,9 +3,33 @@
 Moniketjuinen ja monipörssinen lompakko- ja portfoliokeskitin (hub) puhtaasti **lukuoikeuksilla** (read-only).
 
 Järjestelmä tarjoaa keskitetyn palvelun, jota voidaan käyttää:
-- Paikallisesta Web-hallintapaneelista (`http://127.0.0.1:8000` tai lähiverkossa `0.0.0.0:8000`)
-- MCP Server -työkaluina AI-agenttiympäristöille (Antigravity CLI, Hermes Agent, Grok CLI jne.)
+- Suojatusta Web-hallintapaneelista (**[https://wallets.lan.ikkala.com](https://wallets.lan.ikkala.com)** tai paikallisesti `http://127.0.0.1:8001`)
+- MCP Server -työkaluina AI-agenttiympäristöille (Hermes AI VM, Antigravity CLI, Grok CLI jne.)
 - Kevyenä Python SDK -kirjastona ja REST-rajapintana muille ohjelmointiprojekteille
+- Etänä mistä tahansa MikroTik RouterOS v7 **Back To Home (BTH)** WireGuard VPN:n kautta
+
+---
+
+## 🌐 24/7 Tuotantopalvelin (Hermes AI & Proxmox VE)
+
+Järjestelmä pyörii 24/7 kotiverkon **Hermes AI** -virtuaalikoneella (`192.168.221.189`, Proxmox VM 100, AI VLAN 221):
+* **Web-GUI (HTTPS):** [https://wallets.lan.ikkala.com](https://wallets.lan.ikkala.com) (suojattu Nginx Proxy Managerin Let's Encrypt Wildcard SSL:llä).
+* **Systemd-palvelu:** `omat-krypto-hub.service` (kuuntelee portissa `8001`).
+* **Etäkäyttö matkoilta:** Kytke puhelimesta tai läppäristä MikroTik Back To Home VPN päälle ja avaa linkki selaimessa.
+
+### ⚡ Tehokas uusien versioiden julkaisu (CI/CD)
+Kun kehität koodia PC:llä, vie uusi versio Hermekselle alle 10 sekunnissa:
+```powershell
+python deploy_to_hermes.py
+```
+Skripti pakkaa koodin, siirtää sen SSH/SFTP:llä, päivittää riippuvuudet `.venv`:iin, uudelleenkäynnistää systemd-palvelun ja tekee automaattisen HTTP-terveystarkastuksen.
+
+### 🔄 Datan ja CEX-avainten synkronointi
+Jos lisäät lompakoita tai uusia API-avaimia paikallisesti ja haluat kopioida ne Hermekselle:
+```powershell
+python sync_data_to_hermes.py
+```
+Tarkempi migraatiohistoria ja tekninen kuvaus: **[MIGRATION_JA_JULKAISU.md](MIGRATION_JA_JULKAISU.md)**.
 
 ---
 
